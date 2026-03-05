@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
 
-use rustearch::{
+use srcsearch::{
     SearchHit, SearchScope, index_project, index_target, search_tantivy_index,
     update_tantivy_index, write_json, write_tantivy_index,
 };
@@ -214,7 +214,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::{Cli, Commands, SearchScopeArg, format_search_hits};
     use clap::{CommandFactory, Parser, error::ErrorKind};
-    use rustearch::SearchHit;
+    use srcsearch::SearchHit;
     use std::path::PathBuf;
 
     #[test]

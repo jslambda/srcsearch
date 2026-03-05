@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use rustearch::{SearchRecord, SearchScope, index_project, index_target, search_tantivy_index};
+use srcsearch::{SearchRecord, SearchScope, index_project, index_target, search_tantivy_index};
 use tantivy::schema::Value;
 
 #[test]
@@ -41,7 +41,7 @@ fn indexes_markdown_and_rust() -> std::result::Result<(), Box<dyn std::error::Er
 
 #[test]
 fn indexes_rust_code_between_line_bounds() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    use rustearch::write_tantivy_index;
+    use srcsearch::write_tantivy_index;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
     use tantivy::Index;
@@ -110,7 +110,7 @@ fn indexes_rust_code_between_line_bounds() -> std::result::Result<(), Box<dyn st
 #[test]
 fn doc_scope_search_ignores_code_and_signature_matches()
 -> std::result::Result<(), Box<dyn std::error::Error>> {
-    use rustearch::write_tantivy_index;
+    use srcsearch::write_tantivy_index;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
