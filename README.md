@@ -1,11 +1,11 @@
-# rustearch
+# srcsearch
 
-`rustearch` indexes Rust source and Markdown documentation, then lets you query the result with Tantivy-based full-text search.
+`srcsearch` indexes Rust source and Markdown documentation, then lets you query the result with Tantivy-based full-text search.
 
 It can be used in two ways:
 
-1. **CLI** (`rust-doc-search`) for local workflows and scripting.
-2. **Library** (`rustearch`) for embedding indexing/search in your own Rust tooling.
+1. **CLI** (`srcsearch`) for local workflows and scripting.
+2. **Library** (`srcsearch`) for embedding indexing/search in your own Rust tooling.
 
 ## What gets indexed
 
@@ -17,7 +17,7 @@ It can be used in two ways:
 
 ## CLI usage
 
-The crate provides a binary named `rust-doc-search` with these subcommands:
+The crate provides a binary named `srcsearch` with these subcommands:
 
 - `json` — build a JSON index file
 - `index` — build a Tantivy index directory
@@ -101,18 +101,18 @@ cargo run -- search --index-dir index --query quickstart --json
 
 ## Library usage
 
-Add `rustearch` to your project (path dependency for local checkout shown):
+Add `srcsearch` to your project (path dependency for local checkout shown):
 
 ```toml
 [dependencies]
-rustearch = { path = "../rustearch" }
+srcsearch = { path = "../srcsearch" }
 ```
 
 ### Build records from a project (or a single target)
 
 ```rust
 use std::path::Path;
-use rustearch::{index_project, index_target};
+use srcsearch::{index_project, index_target};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let records = index_project(Path::new("."))?;
@@ -129,7 +129,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use std::path::Path;
-use rustearch::{index_project, write_json, write_tantivy_index};
+use srcsearch::{index_project, write_json, write_tantivy_index};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(".");
@@ -145,7 +145,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use std::path::Path;
-use rustearch::{index_target, update_tantivy_index};
+use srcsearch::{index_target, update_tantivy_index};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(".");
@@ -167,7 +167,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use std::path::Path;
-use rustearch::{search_tantivy_index, SearchScope};
+use srcsearch::{search_tantivy_index, SearchScope};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let hits = search_tantivy_index(Path::new("index"), "quickstart", 10, SearchScope::Doc)?;
