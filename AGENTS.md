@@ -1,0 +1,4 @@
+ - Add relevant unit tests
+ - Runt `cargo test` to verify
+ - Run `carg fmt` at the end
+ - Do not add any new dependency unless it is explicitly requested in the prompt
