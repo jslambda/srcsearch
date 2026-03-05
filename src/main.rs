@@ -24,18 +24,18 @@ impl From<SearchScopeArg> for SearchScope {
 
 const CLI_USAGE_HELP: &str = concat!(
     "Usage:\n",
-    "  rust-doc-search json --project-root . --output index.json\n",
-    "  rust-doc-search json --project-dir . -o index.json\n",
-    "  rust-doc-search index --project-root . --output-dir index\n",
-    "  rust-doc-search index -p . -o index\n",
-    "  rust-doc-search update --project-root . --index-dir index --changed-file src/lib.rs\n",
-    "  rust-doc-search search --index-dir index --query quickstart --scope doc\n",
-    "  rust-doc-search search -i index -q quickstart -s doc",
+    "  srcsearch json --project-root . --output index.json\n",
+    "  srcsearch json --project-dir . -o index.json\n",
+    "  srcsearch index --project-root . --output-dir index\n",
+    "  srcsearch index -p . -o index\n",
+    "  srcsearch update --project-root . --index-dir index --changed-file src/lib.rs\n",
+    "  srcsearch search --index-dir index --query quickstart --scope doc\n",
+    "  srcsearch search -i index -q quickstart -s doc",
 );
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "rust-doc-search",
+    name = "srcsearch",
     version,
     about = "Index Rust and Markdown documentation",
     after_help = CLI_USAGE_HELP
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn parses_json_subcommand() {
         let cli = Cli::parse_from([
-            "rust-doc-search",
+            "srcsearch",
             "json",
             "--project-root",
             ".",
@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn parses_index_subcommand() {
         let cli = Cli::parse_from([
-            "rust-doc-search",
+            "srcsearch",
             "index",
             "--project-root",
             ".",
@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn parses_short_aliases() {
-        let cli = Cli::parse_from(["rust-doc-search", "json", "-p", ".", "-o", "index.json"]);
+        let cli = Cli::parse_from(["srcsearch", "json", "-p", ".", "-o", "index.json"]);
 
         match cli.command {
             Commands::Json {
@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn defaults_project_dir_to_current_directory() {
-        let cli = Cli::parse_from(["rust-doc-search", "index", "-o", "index"]);
+        let cli = Cli::parse_from(["srcsearch", "index", "-o", "index"]);
 
         match cli.command {
             Commands::Index {
@@ -306,7 +306,7 @@ mod tests {
     #[test]
     fn parses_project_dir_alias() {
         let cli = Cli::parse_from([
-            "rust-doc-search",
+            "srcsearch",
             "index",
             "--project-dir",
             ".",
@@ -331,7 +331,7 @@ mod tests {
     #[test]
     fn parses_update_subcommand() {
         let cli = Cli::parse_from([
-            "rust-doc-search",
+            "srcsearch",
             "update",
             "--project-root",
             ".",
@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn parses_search_subcommand_with_defaults() {
         let cli = Cli::parse_from([
-            "rust-doc-search",
+            "srcsearch",
             "search",
             "--index-dir",
             "index",
@@ -396,7 +396,7 @@ mod tests {
     #[test]
     fn parses_search_subcommand_short_flags() {
         let cli = Cli::parse_from([
-            "rust-doc-search",
+            "srcsearch",
             "search",
             "-i",
             "index",
@@ -429,7 +429,7 @@ mod tests {
     #[test]
     fn parses_search_subcommand_large_limit() {
         let cli = Cli::parse_from([
-            "rust-doc-search",
+            "srcsearch",
             "search",
             "--index-dir",
             "index",
@@ -453,7 +453,7 @@ mod tests {
     #[test]
     fn parses_search_scope_doc() {
         let cli = Cli::parse_from([
-            "rust-doc-search",
+            "srcsearch",
             "search",
             "--index-dir",
             "index",
@@ -474,7 +474,7 @@ mod tests {
     #[test]
     fn parses_search_scope_short_alias() {
         let cli = Cli::parse_from([
-            "rust-doc-search",
+            "srcsearch",
             "search",
             "-i",
             "index",
@@ -495,7 +495,7 @@ mod tests {
     #[test]
     fn rejects_invalid_search_scope() {
         let err = Cli::try_parse_from([
-            "rust-doc-search",
+            "srcsearch",
             "search",
             "--index-dir",
             "index",
@@ -512,7 +512,7 @@ mod tests {
     #[test]
     fn parses_search_json_flag() {
         let cli = Cli::parse_from([
-            "rust-doc-search",
+            "srcsearch",
             "search",
             "--index-dir",
             "index",
@@ -562,15 +562,11 @@ mod tests {
         let mut command = Cli::command();
         let help = command.render_help().to_string();
 
-        assert!(help.contains("rust-doc-search json --project-root . --output index.json"));
-        assert!(help.contains("rust-doc-search json --project-dir . -o index.json"));
-        assert!(help.contains("rust-doc-search index --project-root . --output-dir index"));
-        assert!(help.contains("rust-doc-search index -p . -o index"));
-        assert!(
-            help.contains(
-                "rust-doc-search search --index-dir index --query quickstart --scope doc"
-            )
-        );
-        assert!(help.contains("rust-doc-search search -i index -q quickstart -s doc"));
+        assert!(help.contains("srcsearch json --project-root . --output index.json"));
+        assert!(help.contains("srcsearch json --project-dir . -o index.json"));
+        assert!(help.contains("srcsearch index --project-root . --output-dir index"));
+        assert!(help.contains("srcsearch index -p . -o index"));
+        assert!(help.contains("srcsearch search --index-dir index --query quickstart --scope doc"));
+        assert!(help.contains("srcsearch search -i index -q quickstart -s doc"));
     }
 }
