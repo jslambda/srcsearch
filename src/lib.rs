@@ -5,12 +5,18 @@ use std::error::Error;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use tantivy::schema::{Field, INDEXED, STORED, STRING, Schema, TEXT, Value};
+use tantivy::schema::{
+    Field, INDEXED, IndexRecordOption, STORED, STRING, Schema, TEXT, TextFieldIndexing,
+    TextOptions, Value,
+};
+use tantivy::tokenizer::{Language, LowerCaser, SimpleTokenizer, Stemmer, TextAnalyzer};
 use tantivy::{Index, Score, TantivyDocument, Term, doc};
 use tantivy::{collector::TopDocs, query::QueryParser};
 use walkdir::{DirEntry, WalkDir};
 
 pub type AppResult<T> = std::result::Result<T, Box<dyn Error>>;
+
+const DOC_TEXT_ANALYZER: &str = "doc_text_en_stem";
 
 #[derive(Debug)]
 pub enum SearchRecord {
@@ -451,6 +457,7 @@ pub fn write_tantivy_index(
             ),
         )
     })?;
+    register_doc_text_analyzer(&index);
     let mut writer = index.writer(50_000_000).map_err(|err| {
         io::Error::new(
             io::ErrorKind::Other,
@@ -502,7 +509,7 @@ pub fn update_tantivy_index(
             .into());
         }
 
-        Index::open_in_dir(index_dir).map_err(|err| {
+        let index = Index::open_in_dir(index_dir).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!(
@@ -510,7 +517,9 @@ pub fn update_tantivy_index(
                     index_dir.display()
                 ),
             )
-        })?
+        })?;
+        register_doc_text_analyzer(&index);
+        index
     } else {
         fs::create_dir_all(index_dir).map_err(|err| {
             io::Error::new(
@@ -521,7 +530,7 @@ pub fn update_tantivy_index(
                 ),
             )
         })?;
-        Index::create_in_dir(index_dir, build_tantivy_schema()).map_err(|err| {
+        let index = Index::create_in_dir(index_dir, build_tantivy_schema()).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!(
@@ -529,7 +538,9 @@ pub fn update_tantivy_index(
                     index_dir.display()
                 ),
             )
-        })?
+        })?;
+        register_doc_text_analyzer(&index);
+        index
     };
 
     let schema = index.schema();
@@ -572,19 +583,35 @@ pub fn update_tantivy_index(
 }
 
 fn build_tantivy_schema() -> Schema {
+    let doc_text_options = TextOptions::default()
+        .set_indexing_options(
+            TextFieldIndexing::default()
+                .set_tokenizer(DOC_TEXT_ANALYZER)
+                .set_index_option(IndexRecordOption::WithFreqsAndPositions),
+        )
+        .set_stored();
+
     let mut schema_builder = Schema::builder();
     schema_builder.add_text_field("record_type", STRING | STORED);
     schema_builder.add_text_field("file_path", STRING | STORED);
-    schema_builder.add_text_field("title", TEXT | STORED);
+    schema_builder.add_text_field("title", doc_text_options.clone());
     schema_builder.add_text_field("name", STRING | STORED);
     schema_builder.add_text_field("kind", STRING | STORED);
     schema_builder.add_text_field("signature", TEXT | STORED);
-    schema_builder.add_text_field("body_text", TEXT | STORED);
-    schema_builder.add_text_field("doc", TEXT | STORED);
+    schema_builder.add_text_field("body_text", doc_text_options.clone());
+    schema_builder.add_text_field("doc", doc_text_options);
     schema_builder.add_text_field("code", TEXT | STORED);
     schema_builder.add_u64_field("line_start", INDEXED | STORED);
     schema_builder.add_u64_field("line_end", INDEXED | STORED);
     schema_builder.build()
+}
+
+fn register_doc_text_analyzer(index: &Index) {
+    let analyzer = TextAnalyzer::builder(SimpleTokenizer::default())
+        .filter(LowerCaser)
+        .filter(Stemmer::new(Language::English))
+        .build();
+    index.tokenizers().register(DOC_TEXT_ANALYZER, analyzer);
 }
 
 struct TantivySchemaFields {
@@ -713,6 +740,7 @@ pub fn search_tantivy_index(
             ),
         )
     })?;
+    register_doc_text_analyzer(&index);
     let schema = index.schema();
     let record_type = get_tantivy_doc_field(&schema, "record_type")?;
     let file_path = get_tantivy_doc_field(&schema, "file_path")?;
@@ -1063,6 +1091,30 @@ mod tests {
             .expect("search should succeed");
         assert_eq!(docs_hits.len(), 1);
         assert_eq!(docs_hits[0].record_type, "markdown");
+
+        let _ = fs::remove_dir_all(&output_dir);
+    }
+
+    #[test]
+    fn search_tantivy_index_uses_stemmed_doc_analyzer_for_doc_scope_fields() {
+        let output_dir = temp_path("search-index-stemmed-doc-fields");
+        let records = vec![SearchRecord::MarkdownSection {
+            file_path: "README.md".to_string(),
+            section: Section {
+                title: "Overview".to_string(),
+                level: 1,
+                body_text: vec!["libraries are easy to search".to_string()],
+                code_blocks: vec![],
+            },
+        }];
+
+        write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
+
+        let hits = search_tantivy_index(&output_dir, "library", 10, SearchScope::Doc)
+            .expect("search should succeed");
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].record_type, "markdown");
 
         let _ = fs::remove_dir_all(&output_dir);
     }
