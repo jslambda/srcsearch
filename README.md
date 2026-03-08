@@ -19,7 +19,7 @@ It can be used in two ways:
 
 The crate provides a binary named `srcsearch` with these subcommands:
 
-- `json` — build a JSON index file
+- `json` — build a JSON output
 - `index` — build a Tantivy index directory
 - `update` — incrementally update an existing Tantivy index for changed files
 - `search` — query a Tantivy index
@@ -30,7 +30,7 @@ The crate provides a binary named `srcsearch` with these subcommands:
 cargo run -- --help
 ```
 
-### 1) Generate a JSON index
+### 1) Generate a JSON output
 
 ```bash
 cargo run -- json --project-root . --output index.json
@@ -188,4 +188,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 cargo test
 cargo fmt
 ```
-
