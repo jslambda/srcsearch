@@ -85,6 +85,9 @@ enum Commands {
         #[arg(long = "changed-file", required = true, num_args = 1.., value_name = "PATH")]
         changed_files: Vec<String>,
     },
+    #[command(
+        about = "Search indexed content (stemming matches inflected forms in title/body/doc fields)"
+    )]
     Search {
         #[arg(long, short = 'i', value_name = "DIR")]
         index_dir: PathBuf,
@@ -555,6 +558,18 @@ mod tests {
         assert!(output.contains("file_path: src/lib.rs"));
         assert!(output.contains("label: search_tantivy_index"));
         assert!(output.contains("line_start: 42"));
+    }
+
+    #[test]
+    fn search_help_mentions_stemming_behavior() {
+        let mut command = Cli::command();
+        let help = command
+            .find_subcommand_mut("search")
+            .expect("search subcommand should exist")
+            .render_long_help()
+            .to_string();
+
+        assert!(help.contains("stemming matches inflected forms in title/body/doc fields"));
     }
 
     #[test]
