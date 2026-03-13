@@ -97,6 +97,10 @@ cargo run -- search --index-dir index --query quickstart --json
 - `all` (default): query title/body text + Rust symbol/signature/doc/code fields
 - `doc`: query title/body text + Rust doc fields only (ignores signatures/code)
 
+Notes:
+
+- Queries run against `title`, `body_text`, and Rust `doc` fields use stemming, so inflected forms (for example `running` vs `run`) may match.
+
 ---
 
 ## Library usage
