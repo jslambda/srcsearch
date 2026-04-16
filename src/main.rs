@@ -136,19 +136,14 @@ fn format_search_hits(hits: &[SearchHit]) -> String {
     }
 
     let mut output = String::new();
-    for (index, hit) in hits.iter().enumerate() {
-        if index > 0 {
-            output.push('\n');
-        }
-
-        output.push_str(&format!("result: {}\n", index + 1));
-        output.push_str(&format!("score: {:.3}\n", hit.score));
-        output.push_str(&format!("record_type: {}\n", hit.record_type));
-        output.push_str(&format!("file_path: {}\n", hit.file_path));
-        output.push_str(&format!("label: {}\n", format_hit_label(hit)));
-        if let Some(line_start) = hit.line_start {
-            output.push_str(&format!("line_start: {}\n", line_start));
-        }
+    for hit in hits {
+        let line_start = hit.line_start.unwrap_or(1);
+        output.push_str(&format!(
+            "{}:{}:1: {}\n",
+            hit.file_path,
+            line_start,
+            format_hit_label(hit)
+        ));
     }
 
     output
@@ -538,7 +533,7 @@ mod tests {
     }
 
     #[test]
-    fn formats_search_result_blocks() {
+    fn formats_search_result_lines_for_editor_links() {
         let hits = vec![SearchHit {
             score: 1.2345,
             record_type: "rust".to_string(),
@@ -552,12 +547,28 @@ mod tests {
 
         let output = format_search_hits(&hits);
 
-        assert!(output.contains("result: 1"));
-        assert!(output.contains("score: 1.235"));
-        assert!(output.contains("record_type: rust"));
-        assert!(output.contains("file_path: src/lib.rs"));
-        assert!(output.contains("label: search_tantivy_index"));
-        assert!(output.contains("line_start: 42"));
+        assert_eq!(output, "src/lib.rs:42:1: search_tantivy_index\n");
+    }
+
+    #[test]
+    fn formats_search_result_lines_with_default_line_number() {
+        let hits = vec![SearchHit {
+            score: 2.0,
+            record_type: "markdown".to_string(),
+            file_path: "README.md".to_string(),
+            title: Some("semantic search over code and docs".to_string()),
+            name: None,
+            kind: None,
+            signature: None,
+            line_start: None,
+        }];
+
+        let output = format_search_hits(&hits);
+
+        assert_eq!(
+            output,
+            "README.md:1:1: semantic search over code and docs\n"
+        );
     }
 
     #[test]
