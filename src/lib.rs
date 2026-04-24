@@ -127,6 +127,8 @@ struct CodeBlockDef {
     lang: Option<String>,
     meta: Option<String>,
     value: String,
+    start_line: Option<usize>,
+    end_line: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -135,6 +137,9 @@ struct SectionDef {
     level: u8,
     body_text: Vec<String>,
     code_blocks: Vec<CodeBlockDef>,
+    start_line: Option<usize>,
+    end_line: Option<usize>,
+    heading_line: Option<usize>,
 }
 
 impl From<CodeBlock> for CodeBlockDef {
@@ -143,6 +148,8 @@ impl From<CodeBlock> for CodeBlockDef {
             lang: block.lang,
             meta: block.meta,
             value: block.value,
+            start_line: block.start_line,
+            end_line: block.end_line,
         }
     }
 }
@@ -153,6 +160,8 @@ impl From<CodeBlockDef> for CodeBlock {
             lang: block.lang,
             meta: block.meta,
             value: block.value,
+            start_line: block.start_line,
+            end_line: block.end_line,
         }
     }
 }
@@ -168,6 +177,9 @@ impl From<Section> for SectionDef {
                 .into_iter()
                 .map(CodeBlockDef::from)
                 .collect(),
+            start_line: section.start_line,
+            end_line: section.end_line,
+            heading_line: section.heading_line,
         }
     }
 }
@@ -183,6 +195,9 @@ impl From<SectionDef> for Section {
                 .into_iter()
                 .map(CodeBlock::from)
                 .collect(),
+            start_line: section.start_line,
+            end_line: section.end_line,
+            heading_line: section.heading_line,
         }
     }
 }
@@ -879,6 +894,9 @@ mod tests {
                     level: 1,
                     body_text: vec!["search docs".to_string()],
                     code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
                 },
             },
             SearchRecord::RustIndexEntry(IndexEntry {
@@ -913,6 +931,9 @@ mod tests {
                 level: 1,
                 body_text: vec!["old body".to_string()],
                 code_blocks: vec![],
+                start_line: None,
+                end_line: None,
+                heading_line: None,
             },
         }];
         write_tantivy_index(&initial_records, &output_dir, None)
@@ -925,6 +946,9 @@ mod tests {
                 level: 1,
                 body_text: vec!["new body".to_string()],
                 code_blocks: vec![],
+                start_line: None,
+                end_line: None,
+                heading_line: None,
             },
         }];
 
@@ -958,6 +982,9 @@ mod tests {
                 level: 1,
                 body_text: vec!["old body".to_string()],
                 code_blocks: vec![],
+                start_line: None,
+                end_line: None,
+                heading_line: None,
             },
         }];
         write_tantivy_index(&initial_records, &output_dir, None)
@@ -1022,6 +1049,9 @@ mod tests {
                     level: 1,
                     body_text: vec!["tantivy quickstart guide".to_string()],
                     code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
                 },
             },
             SearchRecord::RustIndexEntry(IndexEntry {
@@ -1067,6 +1097,9 @@ mod tests {
                     level: 1,
                     body_text: vec!["tantivy quickstart guide".to_string()],
                     code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
                 },
             },
             SearchRecord::RustIndexEntry(IndexEntry {
@@ -1105,6 +1138,9 @@ mod tests {
                 level: 1,
                 body_text: vec!["libraries are easy to search".to_string()],
                 code_blocks: vec![],
+                start_line: None,
+                end_line: None,
+                heading_line: None,
             },
         }];
 
@@ -1209,6 +1245,9 @@ mod tests {
                 level: 1,
                 body_text: vec!["tantivy quickstart guide".to_string()],
                 code_blocks: vec![],
+                start_line: None,
+                end_line: None,
+                heading_line: None,
             },
         }];
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
@@ -1232,6 +1271,9 @@ mod tests {
                 level: 1,
                 body_text: vec!["tantivy quickstart guide".to_string()],
                 code_blocks: vec![],
+                start_line: None,
+                end_line: None,
+                heading_line: None,
             },
         }];
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
