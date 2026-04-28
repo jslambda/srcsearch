@@ -7,6 +7,11 @@ It can be used in two ways:
 1. **CLI** (`srcsearch`) for local workflows and scripting.
 2. **Library** (`srcsearch`) for embedding indexing/search in your own Rust tooling.
 
+## Crates.io notes
+
+- Package metadata includes license, categories, keywords, and docs.rs docs link.
+- Test fixtures are excluded from published package contents to keep tarballs smaller.
+
 ## What gets indexed
 
 - `*.rs` files (symbols, signatures, docs, and optional code snippets)
