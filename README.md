@@ -1,22 +1,11 @@
 # srcsearch
 
-`srcsearch` indexes Rust source and Markdown documentation, then lets you query the result with Tantivy-based full-text search.
+`srcsearch` is a lightweight search engine for source code and project documentation, combining BM25-based ranking with documentation-aware indexing. It indexes Rust source and Markdown documentation, then lets you query the result with Tantivy-based full-text search.
 
 It can be used in two ways:
 
 1. **CLI** (`srcsearch`) for local workflows and scripting.
 2. **Library** (`srcsearch`) for embedding indexing/search in your own Rust tooling.
-
-## Crates.io notes
-
-- Package metadata includes license, categories, keywords, and docs.rs docs link.
-- Test fixtures are excluded from published package contents to keep tarballs smaller.
-
-## What gets indexed
-
-- `*.rs` files (symbols, signatures, docs, and optional code snippets)
-- `*.md` files (section titles and body text)
-- Directory traversal skips common generated folders: `target`, `.git`, and `node_modules`.
 
 ---
 
