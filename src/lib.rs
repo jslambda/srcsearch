@@ -34,6 +34,8 @@ pub struct SearchHit {
     pub kind: Option<String>,
     pub signature: Option<String>,
     pub line_start: Option<u64>,
+    pub line_end: Option<u64>,
+    pub heading_line: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -618,6 +620,7 @@ fn build_tantivy_schema() -> Schema {
     schema_builder.add_text_field("code", TEXT | STORED);
     schema_builder.add_u64_field("line_start", INDEXED | STORED);
     schema_builder.add_u64_field("line_end", INDEXED | STORED);
+    schema_builder.add_u64_field("heading_line", INDEXED | STORED);
     schema_builder.build()
 }
 
@@ -641,6 +644,7 @@ struct TantivySchemaFields {
     code_field: Field,
     line_start: Field,
     line_end: Field,
+    heading_line: Field,
 }
 
 impl TantivySchemaFields {
@@ -657,6 +661,7 @@ impl TantivySchemaFields {
             code_field: get_tantivy_doc_field(schema, "code")?,
             line_start: get_tantivy_doc_field(schema, "line_start")?,
             line_end: get_tantivy_doc_field(schema, "line_end")?,
+            heading_line: get_tantivy_doc_field(schema, "heading_line")?,
         })
     }
 }
@@ -670,12 +675,24 @@ fn build_tantivy_document(
         SearchRecord::MarkdownSection {
             file_path: source_file,
             section,
-        } => doc!(
-            schema_fields.record_type => "markdown",
-            schema_fields.file_path => source_file.clone(),
-            schema_fields.title => section.title.clone(),
-            schema_fields.body_text => section.body_text.join("\n")
-        ),
+        } => {
+            let mut document = doc!(
+                schema_fields.record_type => "markdown",
+                schema_fields.file_path => source_file.clone(),
+                schema_fields.title => section.title.clone(),
+                schema_fields.body_text => section.body_text.join("\n")
+            );
+            if let Some(start_line) = section.start_line {
+                document.add_u64(schema_fields.line_start, start_line as u64);
+            }
+            if let Some(end_line) = section.end_line {
+                document.add_u64(schema_fields.line_end, end_line as u64);
+            }
+            if let Some(heading_line) = section.heading_line {
+                document.add_u64(schema_fields.heading_line, heading_line as u64);
+            }
+            document
+        }
         SearchRecord::RustIndexEntry(entry) => {
             let mut document = doc!(
                 schema_fields.record_type => "rust",
@@ -764,6 +781,8 @@ pub fn search_tantivy_index(
     let kind = get_tantivy_doc_field(&schema, "kind")?;
     let signature = get_tantivy_doc_field(&schema, "signature")?;
     let line_start = schema.get_field("line_start").ok();
+    let line_end = schema.get_field("line_end").ok();
+    let heading_line = schema.get_field("heading_line").ok();
     let body_text = get_tantivy_doc_field(&schema, "body_text")?;
     let doc_field = get_tantivy_doc_field(&schema, "doc")?;
     let code_field = get_tantivy_doc_field(&schema, "code")?;
@@ -828,6 +847,10 @@ pub fn search_tantivy_index(
             kind: get_text(kind),
             signature: get_text(signature),
             line_start: line_start
+                .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
+            line_end: line_end
+                .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
+            heading_line: heading_line
                 .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
         });
     }
@@ -1075,6 +1098,8 @@ mod tests {
         assert_eq!(markdown_hits[0].file_path, "README.md");
         assert_eq!(markdown_hits[0].title.as_deref(), Some("Getting started"));
         assert_eq!(markdown_hits[0].line_start, None);
+        assert_eq!(markdown_hits[0].line_end, None);
+        assert_eq!(markdown_hits[0].heading_line, None);
 
         let rust_hits =
             search_tantivy_index(&output_dir, "search_tantivy_index", 10, SearchScope::All)
@@ -1082,6 +1107,8 @@ mod tests {
         assert_eq!(rust_hits.len(), 1);
         assert_eq!(rust_hits[0].record_type, "rust");
         assert_eq!(rust_hits[0].line_start, Some(100));
+        assert_eq!(rust_hits[0].line_end, Some(110));
+        assert_eq!(rust_hits[0].heading_line, None);
 
         let _ = fs::remove_dir_all(&output_dir);
     }
@@ -1156,6 +1183,36 @@ mod tests {
     }
 
     #[test]
+    fn searches_tantivy_index_returns_markdown_line_metadata() {
+        let output_dir = temp_path("search-index-markdown-lines");
+        let records = vec![SearchRecord::MarkdownSection {
+            file_path: "README.md".to_string(),
+            section: Section {
+                title: "Quickstart".to_string(),
+                level: 2,
+                body_text: vec!["how to start quickly".to_string()],
+                code_blocks: vec![],
+                start_line: Some(10),
+                end_line: Some(24),
+                heading_line: Some(12),
+            },
+        }];
+
+        write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
+
+        let hits = search_tantivy_index(&output_dir, "quickly", 10, SearchScope::All)
+            .expect("search should succeed");
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].record_type, "markdown");
+        assert_eq!(hits[0].line_start, Some(10));
+        assert_eq!(hits[0].line_end, Some(24));
+        assert_eq!(hits[0].heading_line, Some(12));
+
+        let _ = fs::remove_dir_all(&output_dir);
+    }
+
+    #[test]
     fn gets_tantivy_doc_field_from_schema() {
         let mut schema_builder = Schema::builder();
         let title = schema_builder.add_text_field("title", TEXT | STORED);
@@ -1220,6 +1277,9 @@ mod tests {
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].record_type, "markdown");
         assert_eq!(hits[0].file_path, "README.md");
+        assert_eq!(hits[0].line_start, None);
+        assert_eq!(hits[0].line_end, None);
+        assert_eq!(hits[0].heading_line, None);
 
         let _ = fs::remove_dir_all(&output_dir);
     }

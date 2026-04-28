@@ -543,6 +543,8 @@ mod tests {
             kind: Some("fn".to_string()),
             signature: Some("pub fn search_tantivy_index(...)".to_string()),
             line_start: Some(42),
+            line_end: Some(47),
+            heading_line: None,
         }];
 
         let output = format_search_hits(&hits);
@@ -561,6 +563,8 @@ mod tests {
             kind: None,
             signature: None,
             line_start: None,
+            line_end: None,
+            heading_line: None,
         }];
 
         let output = format_search_hits(&hits);
