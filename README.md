@@ -1,6 +1,6 @@
 # srcsearch
 
-`srcsearch` is a lightweight search engine for source code and project documentation, combining BM25-based ranking with documentation-aware indexing. It indexes Rust source and Markdown documentation, then lets you query the result with Tantivy-based full-text search.
+`srcsearch` is a lightweight search engine for source code and project documentation. It indexes Rust source files and Markdown content, then lets developers query it using Tantivy-powered full-text search with BM25 ranking.
 
 It can be used in two ways:
 
