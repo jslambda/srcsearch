@@ -1,0 +1,14 @@
+[
+  {
+    "label": "srcsearch: index",
+    "command": "srcsearch",
+    "args": ["index", "--project-dir" , "$ZED_WORKTREE_ROOT","--output-dir", "$ZED_WORKTREE_ROOT/.zed/srcindex"],
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "srcsearch: search selected text",
+    "command": "srcsearch",
+    "args": ["search", "--index-dir","$ZED_WORKTREE_ROOT/.zed/srcindex","--query","$ZED_SELECTED_TEXT"],
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+]
