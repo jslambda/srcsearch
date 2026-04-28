@@ -99,12 +99,14 @@ Notes:
 
 ## Library usage
 
-Add `srcsearch` to your project (path dependency for local checkout shown):
+Add `srcsearch` from crates.io:
 
 ```toml
 [dependencies]
-srcsearch = { path = "../srcsearch" }
+srcsearch = "0.1"
 ```
+
+If you are working from a local checkout instead, you can use a path dependency temporarily.
 
 ### Build records from a project (or a single target)
 
