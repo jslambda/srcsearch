@@ -1,3 +1,16 @@
+//! # srcsearch
+//!
+//! `srcsearch` indexes Rust source and Markdown documentation, and supports
+//! full-text lookup over indexed content through Tantivy.
+//!
+//! ## Typical workflow
+//!
+//! 1. Build records with [`index_project`] (or [`index_target`] for incremental work).
+//! 2. Persist results via [`write_json`] or [`write_tantivy_index`].
+//! 3. Query with [`search_tantivy_index`].
+//!
+//! See the project README for CLI examples and end-to-end usage.
+
 use markdown2json::{CodeBlock, Section, index_markdown};
 use rust2json::{IndexEntry, build_file_index};
 use serde::{Deserialize, Serialize};

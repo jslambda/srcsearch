@@ -2,6 +2,13 @@
 name = "srcsearch"
 version = "0.1.0"
 edition = "2024"
+description = "Index Rust source and Markdown docs, then search them with Tantivy"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+documentation = "https://docs.rs/srcsearch"
+keywords = ["search", "indexing", "rust", "markdown", "tantivy"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = ["tests/fixtures/**"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
