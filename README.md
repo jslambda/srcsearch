@@ -106,7 +106,11 @@ Add `srcsearch` from crates.io:
 srcsearch = "0.1"
 ```
 
-If you are working from a local checkout instead, you can use a path dependency temporarily.
+If you are working from a local checkout instead, you can use a path dependency:
+
+```toml
+srcsearch = { path = "../srcsearch" }
+```
 
 ### Build records from a project (or a single target)
 
