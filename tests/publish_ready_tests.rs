@@ -24,3 +24,4 @@ fn readme_mentions_library_and_cli_usage() {
     assert!(readme.contains("## CLI usage"));
     assert!(readme.contains("## Library usage"));
 }
+
