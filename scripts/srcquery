@@ -1,0 +1,1 @@
+srcsearch search -i .srcsearch -q $1
