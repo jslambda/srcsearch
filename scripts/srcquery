@@ -1,1 +1,10 @@
-srcsearch search -i .srcsearch -q $1
+#!/usr/bin/env sh
+set -eu
+
+if [ "$#" -ne 1 ]; then
+  echo "Usage: srcquery \"<query>\"" >&2
+  echo "Example: srcquery \"parse markdown headings\"" >&2
+  exit 2
+fi
+
+srcsearch search -i .srcsearch -q "$1"
