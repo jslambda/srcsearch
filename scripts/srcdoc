@@ -1,1 +1,9 @@
-srcsearch search -i .srcsearch -q $1 --scope doc
+#!/usr/bin/env sh
+set -eu
+
+if [ "$#" -ne 1 ]; then
+  echo "Usage: srcdoc \"<query>\"" >&2
+  echo "Example: srcdoc \"parse markdown headings\"" >&2
+  exit 2
+fi
+srcsearch search -i .srcsearch -q "$1" --scope doc

@@ -1,1 +1,2 @@
+#!/usr/bin/env sh
 srcsearch index -p . -o .srcsearch
