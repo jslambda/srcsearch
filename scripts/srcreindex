@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -eu
+rm -rf .srcsearch
+srcsearch index -p . -o .srcsearch
