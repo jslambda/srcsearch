@@ -811,7 +811,13 @@ pub fn search_tantivy_index(
         SearchScope::All => vec![title, body_text, name, signature, doc_field, code_field],
         SearchScope::Doc => vec![title, body_text, doc_field],
     };
-    let query_parser = QueryParser::for_index(&index, search_fields);
+    let mut query_parser = QueryParser::for_index(&index, search_fields);
+    query_parser.set_field_boost(title, 4.0);
+    query_parser.set_field_boost(name, 4.0);
+    query_parser.set_field_boost(doc_field, 2.0);
+    query_parser.set_field_boost(signature, 2.0);
+    query_parser.set_field_boost(body_text, 2.0);
+    query_parser.set_field_boost(code_field, 1.0);
     let parsed_query = query_parser.parse_query(query).map_err(|err| {
         io::Error::new(
             io::ErrorKind::Other,
@@ -903,7 +909,7 @@ mod tests {
         SearchRecord, SearchScope, extract_code_snippet, get_tantivy_doc_field,
         search_tantivy_index, update_tantivy_index, write_tantivy_index,
     };
-    use markdown2json::Section;
+    use markdown2json::{CodeBlock, Section};
     use rust2json::IndexEntry;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -1221,6 +1227,106 @@ mod tests {
         assert_eq!(hits[0].line_start, Some(10));
         assert_eq!(hits[0].line_end, Some(24));
         assert_eq!(hits[0].heading_line, Some(12));
+
+        let _ = fs::remove_dir_all(&output_dir);
+    }
+
+    #[test]
+    fn search_tantivy_index_prioritizes_title_and_name_matches() {
+        let output_dir = temp_path("search-index-title-name-boost");
+        let records = vec![
+            SearchRecord::MarkdownSection {
+                file_path: "README.md".to_string(),
+                section: Section {
+                    title: "Boost target".to_string(),
+                    level: 1,
+                    body_text: vec!["background context".to_string()],
+                    code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
+                },
+            },
+            SearchRecord::MarkdownSection {
+                file_path: "GUIDE.md".to_string(),
+                section: Section {
+                    title: "Unrelated".to_string(),
+                    level: 1,
+                    body_text: vec!["boost target".to_string()],
+                    code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
+                },
+            },
+        ];
+
+        write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
+
+        let hits = search_tantivy_index(&output_dir, "boost target", 10, SearchScope::All)
+            .expect("search should succeed");
+
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].file_path, "README.md");
+
+        let _ = fs::remove_dir_all(&output_dir);
+    }
+
+    #[test]
+    fn search_tantivy_index_prioritizes_high_fields_over_code() {
+        let output_dir = temp_path("search-index-high-over-code-boost");
+        let records = vec![
+            SearchRecord::MarkdownSection {
+                file_path: "high.md".to_string(),
+                section: Section {
+                    title: "Reference".to_string(),
+                    level: 2,
+                    body_text: vec!["background".to_string()],
+                    code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
+                },
+            },
+            SearchRecord::MarkdownSection {
+                file_path: "medium.md".to_string(),
+                section: Section {
+                    title: "Code example".to_string(),
+                    level: 2,
+                    body_text: vec!["background".to_string()],
+                    code_blocks: vec![CodeBlock {
+                        lang: Some("rust".to_string()),
+                        meta: None,
+                        value: "boost_target".to_string(),
+                        start_line: None,
+                        end_line: None,
+                    }],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
+                },
+            },
+        ];
+
+        let rust_record = SearchRecord::RustIndexEntry(IndexEntry {
+            kind: "fn".to_string(),
+            name: "helper".to_string(),
+            file: "src/lib.rs".to_string(),
+            line_start: 1,
+            line_end: 1,
+            signature: "pub fn boost_target()".to_string(),
+            doc_summary: None,
+            doc: None,
+        });
+        let mut records = records;
+        records.push(rust_record);
+        write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
+
+        let hits = search_tantivy_index(&output_dir, "boost_target", 10, SearchScope::All)
+            .expect("search should succeed");
+
+        assert!(!hits.is_empty());
+        assert_eq!(hits[0].file_path, "src/lib.rs");
 
         let _ = fs::remove_dir_all(&output_dir);
     }
