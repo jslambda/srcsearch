@@ -86,6 +86,61 @@ JSON output:
 cargo run -- search --index-dir index --query quickstart --json
 ```
 
+Example JSON result payload:
+
+```json
+[
+  {
+    "score": 4.23791,
+    "record_type": "markdown",
+    "file_path": "docs/guide.md",
+    "title": "Quickstart",
+    "name": null,
+    "kind": null,
+    "signature": null,
+    "line_start": 1,
+    "line_end": 18,
+    "heading_line": 1
+  },
+  {
+    "score": 3.91244,
+    "record_type": "rust",
+    "file_path": "src/lib.rs",
+    "title": null,
+    "name": "add_one",
+    "kind": "function",
+    "signature": "pub fn add_one(value: i32) -> i32",
+    "line_start": 3,
+    "line_end": 5,
+    "heading_line": null
+  },
+  {
+    "score": 3.10582,
+    "record_type": "rust",
+    "file_path": "src/lib.rs",
+    "title": null,
+    "name": "Widget",
+    "kind": "struct",
+    "signature": "pub struct Widget",
+    "line_start": 8,
+    "line_end": 12,
+    "heading_line": null
+  },
+  {
+    "score": 2.84467,
+    "record_type": "rust",
+    "file_path": "src/lib.rs",
+    "title": null,
+    "name": "Widget::new",
+    "kind": "impl_method",
+    "signature": "pub fn new() -> Self",
+    "line_start": 14,
+    "line_end": 16,
+    "heading_line": null
+  }
+]
+```
+
 #### Search scopes
 
 - `all` (default): query title/body text + Rust symbol/signature/doc/code fields
