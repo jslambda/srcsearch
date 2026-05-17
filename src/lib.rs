@@ -272,10 +272,12 @@ fn clone_index_entry(entry: &IndexEntry) -> IndexEntry {
     }
 }
 
+/// Collects Rust and Markdown files under a project root while honoring ignore rules.
 pub fn collect_files(project_root: &Path) -> AppResult<(Vec<PathBuf>, Vec<PathBuf>)> {
     collect_supported_files(project_root)
 }
 
+/// Walks a directory and separates supported files into Rust and Markdown buckets.
 fn collect_supported_files(target_dir: &Path) -> AppResult<(Vec<PathBuf>, Vec<PathBuf>)> {
     let mut rust_files = Vec::new();
     let mut markdown_files = Vec::new();
@@ -300,6 +302,7 @@ fn collect_supported_files(target_dir: &Path) -> AppResult<(Vec<PathBuf>, Vec<Pa
     Ok((rust_files, markdown_files))
 }
 
+/// Classifies a path by extension into a supported source type for indexing.
 fn classify_supported_file(path: &Path) -> Option<SupportedFileKind> {
     match path.extension().and_then(|ext| ext.to_str()) {
         Some("rs") => Some(SupportedFileKind::Rust),
@@ -308,6 +311,7 @@ fn classify_supported_file(path: &Path) -> Option<SupportedFileKind> {
     }
 }
 
+/// Decides whether a directory entry should be traversed during filesystem walking.
 fn should_walk(entry: &DirEntry) -> bool {
     let file_name = entry.file_name().to_string_lossy();
     if entry.file_type().is_dir() {
@@ -317,10 +321,12 @@ fn should_walk(entry: &DirEntry) -> bool {
     }
 }
 
+/// Indexes an entire project directory relative to itself.
 pub fn index_project(project_root: &Path) -> AppResult<Vec<SearchRecord>> {
     index_target(project_root, project_root)
 }
 
+/// Indexes either a single file or directory and normalizes file paths relative to `project_root`.
 pub fn index_target(target: &Path, project_root: &Path) -> AppResult<Vec<SearchRecord>> {
     let (rust_files, markdown_files) = if target.is_dir() {
         collect_supported_files(target)?
@@ -388,6 +394,7 @@ pub fn index_target(target: &Path, project_root: &Path) -> AppResult<Vec<SearchR
     Ok(records)
 }
 
+/// Writes indexed records as pretty JSON using a temporary file for atomic replacement.
 pub fn write_json(records: &[SearchRecord], output_path: &Path) -> AppResult<()> {
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
@@ -423,6 +430,7 @@ pub fn write_json(records: &[SearchRecord], output_path: &Path) -> AppResult<()>
     Ok(())
 }
 
+/// Creates a new Tantivy index directory and writes all provided records into it.
 pub fn write_tantivy_index(
     records: &[SearchRecord],
     output_dir: &Path,
@@ -524,6 +532,7 @@ pub fn write_tantivy_index(
     Ok(())
 }
 
+/// Updates an existing Tantivy index by deleting changed files and re-adding their current records.
 pub fn update_tantivy_index(
     records: &[SearchRecord],
     index_dir: &Path,
@@ -612,6 +621,7 @@ pub fn update_tantivy_index(
     Ok(())
 }
 
+/// Builds the Tantivy schema used for both indexing and querying source records.
 fn build_tantivy_schema() -> Schema {
     let doc_text_options = TextOptions::default()
         .set_indexing_options(
@@ -637,6 +647,7 @@ fn build_tantivy_schema() -> Schema {
     schema_builder.build()
 }
 
+/// Registers the analyzer used for stemmed documentation-style text search.
 fn register_doc_text_analyzer(index: &Index) {
     let analyzer = TextAnalyzer::builder(SimpleTokenizer::default())
         .filter(LowerCaser)
@@ -731,6 +742,7 @@ fn build_tantivy_document(
     Ok(document)
 }
 
+/// Looks up a required Tantivy field by name and returns a contextual error if missing.
 pub fn get_tantivy_doc_field(schema: &Schema, field_name: &str) -> AppResult<Field> {
     schema.get_field(field_name).map_err(|err| {
         io::Error::new(
@@ -741,6 +753,7 @@ pub fn get_tantivy_doc_field(schema: &Schema, field_name: &str) -> AppResult<Fie
     })
 }
 
+/// Executes a scoped full-text search over a Tantivy index and returns normalized hit metadata.
 pub fn search_tantivy_index(
     index_dir: &Path,
     query: &str,

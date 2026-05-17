@@ -102,10 +102,12 @@ enum Commands {
     },
 }
 
+/// Returns `Some` only when the input string exists and is not whitespace-only.
 fn non_empty(value: Option<&str>) -> Option<&str> {
     value.filter(|value| !value.trim().is_empty())
 }
 
+/// Builds a stable display label for a hit by preferring fields that best identify the record.
 fn format_hit_label(hit: &SearchHit) -> String {
     // Field precedence rules (keep stable for deterministic output):
     // 1) markdown prefers section title, then name/signature fallbacks.
@@ -130,6 +132,7 @@ fn format_hit_label(hit: &SearchHit) -> String {
     }
 }
 
+/// Formats search hits into `path:line:col: label` lines that editors can parse as jump targets.
 fn format_search_hits(hits: &[SearchHit]) -> String {
     if hits.is_empty() {
         return "No results found.\n".to_string();
@@ -149,6 +152,7 @@ fn format_search_hits(hits: &[SearchHit]) -> String {
     output
 }
 
+/// Parses CLI arguments and dispatches to indexing, update, or search workflows.
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
 
