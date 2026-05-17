@@ -95,6 +95,23 @@ Notes:
 
 - Queries run against `title`, `body_text`, and Rust `doc` fields use stemming, so inflected forms (for example `running` vs `run`) may match.
 
+### Convenience scripts
+
+The repository includes a few helper scripts under `scripts/` for common local workflows. They all assume the index directory is `.srcsearch` at the project root.
+
+- `scripts/srcindex` — create a fresh `.srcsearch` index from the current project.
+- `scripts/srcreindex` — remove `.srcsearch` and rebuild it from scratch.
+- `scripts/srcquery "<query>"` — run a regular search (`--scope all`) against `.srcsearch`.
+- `scripts/srcdoc "<query>"` — run a docs-focused search (`--scope doc`) against `.srcsearch`.
+
+Typical usage:
+
+```bash
+scripts/srcindex
+scripts/srcquery "how does indexing work"
+scripts/srcdoc "search scope"
+```
+
 ---
 
 ## Library usage
