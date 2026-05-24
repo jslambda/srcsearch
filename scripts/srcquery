@@ -3,14 +3,13 @@ set -eu
 
 json_flag=""
 
-if [ "$#" -eq 2 ] && [ "$1" = "--json" ]; then
+if [ "$#" -eq 2 ] && [ "$2" = "--json" ]; then
   json_flag="--json"
-  shift
 fi
 
-if [ "$#" -ne 1 ]; then
-  echo "Usage: srcquery [--json] \"<query>\"" >&2
-  echo "Example: srcquery --json \"parse markdown headings\"" >&2
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "Usage: srcquery \"<query>\" [--json]" >&2
+  echo "Example: srcquery \"parse markdown headings\" --json" >&2
   exit 2
 fi
 

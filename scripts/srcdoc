@@ -3,14 +3,13 @@ set -eu
 
 json_flag=""
 
-if [ "$#" -eq 2 ] && [ "$1" = "--json" ]; then
+if [ "$#" -eq 2 ] && [ "$2" = "--json" ]; then
   json_flag="--json"
-  shift
 fi
 
-if [ "$#" -ne 1 ]; then
-  echo "Usage: srcdoc [--json] \"<query>\"" >&2
-  echo "Example: srcdoc --json \"parse markdown headings\"" >&2
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "Usage: srcdoc \"<query>\" [--json]" >&2
+  echo "Example: srcdoc \"parse markdown headings\" --json" >&2
   exit 2
 fi
 srcsearch search -i .srcsearch -q "$1" --scope doc $json_flag

@@ -109,7 +109,7 @@ Typical usage:
 ```bash
 scripts/srcindex
 scripts/srcquery "how does indexing work"
-scripts/srcdoc --json "search scope"
+scripts/srcdoc "search scope" --json
 ```
 
 ---
