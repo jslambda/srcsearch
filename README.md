@@ -18,34 +18,42 @@ The crate provides a binary named `srcsearch` with these subcommands:
 - `update` — incrementally update an existing Tantivy index for changed files
 - `search` — query a Tantivy index
 
-### Build and run
+### Install and run
+
+Install from crates.io:
 
 ```bash
-cargo run -- --help
+cargo install srcsearch
+```
+
+Then run:
+
+```bash
+srcsearch --help
 ```
 
 ### 1) Generate a JSON output
 
 ```bash
-cargo run -- json --project-root . --output index.json
+srcsearch json --project-root . --output index.json
 ```
 
 Short form:
 
 ```bash
-cargo run -- json -p . -o index.json
+srcsearch json -p . -o index.json
 ```
 
 ### 2) Build a Tantivy index directory
 
 ```bash
-cargo run -- index --project-root . --output-dir index
+srcsearch index --project-root . --output-dir index
 ```
 
 Short form:
 
 ```bash
-cargo run -- index -p . -o index
+srcsearch index -p . -o index
 ```
 
 > `--output-dir` must be empty (or not exist yet) when creating a fresh index.
@@ -53,7 +61,7 @@ cargo run -- index -p . -o index
 ### 3) Update an existing index after file changes
 
 ```bash
-cargo run -- update \
+srcsearch update \
   --project-root . \
   --index-dir index \
   --changed-file src/lib.rs \
@@ -63,7 +71,7 @@ cargo run -- update \
 Short form:
 
 ```bash
-cargo run -- update -p . -i index --changed-file src/lib.rs
+srcsearch update -p . -i index --changed-file src/lib.rs
 ```
 
 ### 4) Search the index
@@ -71,19 +79,19 @@ cargo run -- update -p . -i index --changed-file src/lib.rs
 Search all fields (default scope):
 
 ```bash
-cargo run -- search --index-dir index --query quickstart
+srcsearch search --index-dir index --query quickstart
 ```
 
 Restrict search to documentation-focused fields only:
 
 ```bash
-cargo run -- search --index-dir index --query quickstart --scope doc
+srcsearch search --index-dir index --query quickstart --scope doc
 ```
 
 JSON output:
 
 ```bash
-cargo run -- search --index-dir index --query quickstart --json
+srcsearch search --index-dir index --query quickstart --json
 ```
 
 Example JSON result payload:
