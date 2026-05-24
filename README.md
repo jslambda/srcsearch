@@ -101,15 +101,15 @@ The repository includes a few helper scripts under `scripts/` for common local w
 
 - `scripts/srcindex` — create a fresh `.srcsearch` index from the current project.
 - `scripts/srcreindex` — remove `.srcsearch` and rebuild it from scratch.
-- `scripts/srcquery "<query>"` — run a regular search (`--scope all`) against `.srcsearch`.
-- `scripts/srcdoc "<query>"` — run a docs-focused search (`--scope doc`) against `.srcsearch`.
+- `scripts/srcquery "<query>"` — run a regular search (`--scope all`) against `.srcsearch` (optionally add `--json`).
+- `scripts/srcdoc "<query>"` — run a docs-focused search (`--scope doc`) against `.srcsearch` (optionally add `--json`).
 
 Typical usage:
 
 ```bash
 scripts/srcindex
 scripts/srcquery "how does indexing work"
-scripts/srcdoc "search scope"
+scripts/srcdoc --json "search scope"
 ```
 
 ---

@@ -1,9 +1,16 @@
 #!/usr/bin/env sh
 set -eu
 
+json_flag=""
+
+if [ "$#" -eq 2 ] && [ "$1" = "--json" ]; then
+  json_flag="--json"
+  shift
+fi
+
 if [ "$#" -ne 1 ]; then
-  echo "Usage: srcdoc \"<query>\"" >&2
-  echo "Example: srcdoc \"parse markdown headings\"" >&2
+  echo "Usage: srcdoc [--json] \"<query>\"" >&2
+  echo "Example: srcdoc --json \"parse markdown headings\"" >&2
   exit 2
 fi
-srcsearch search -i .srcsearch -q "$1" --scope doc
+srcsearch search -i .srcsearch -q "$1" --scope doc $json_flag
