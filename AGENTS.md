@@ -3,3 +3,4 @@
  - Run `carg fmt` at the end
  - Do not add any new dependency unless it is explicitly requested in the prompt
  - Update the existing comments as you change the code
+ - Do not add tests when updating documentation.
