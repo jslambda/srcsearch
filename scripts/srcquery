@@ -1,10 +1,16 @@
 #!/usr/bin/env sh
 set -eu
 
-if [ "$#" -ne 1 ]; then
-  echo "Usage: srcquery \"<query>\"" >&2
-  echo "Example: srcquery \"parse markdown headings\"" >&2
+json_flag=""
+
+if [ "$#" -eq 2 ] && [ "$2" = "--json" ]; then
+  json_flag="--json"
+fi
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "Usage: srcquery \"<query>\" [--json]" >&2
+  echo "Example: srcquery \"parse markdown headings\" --json" >&2
   exit 2
 fi
 
-srcsearch search -i .srcsearch -q "$1"
+srcsearch search -i .srcsearch -q "$1" $json_flag
