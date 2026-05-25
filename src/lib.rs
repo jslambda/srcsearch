@@ -37,7 +37,7 @@ pub enum SearchRecord {
     RustIndexEntry(IndexEntry),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchHit {
     pub score: Score,
     pub record_type: String,
@@ -49,6 +49,12 @@ pub struct SearchHit {
     pub line_start: Option<u64>,
     pub line_end: Option<u64>,
     pub heading_line: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SearchHitWithExplanation {
+    pub hit: SearchHit,
+    pub explanation: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -890,6 +896,157 @@ pub fn search_tantivy_index(
     Ok(hits)
 }
 
+/// Executes search and optionally attaches Tantivy score explanations for the top results.
+pub fn search_tantivy_index_with_explain(
+    index_dir: &Path,
+    query: &str,
+    limit: i64,
+    scope: SearchScope,
+    explain: bool,
+) -> AppResult<Vec<SearchHitWithExplanation>> {
+    if limit <= 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "tantivy search limit must be at least 1",
+        )
+        .into());
+    }
+    if !index_dir.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "tantivy index directory does not exist: {}",
+                index_dir.display()
+            ),
+        )
+        .into());
+    }
+    if !index_dir.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "tantivy index path is not a directory: {}",
+                index_dir.display()
+            ),
+        )
+        .into());
+    }
+
+    let index = Index::open_in_dir(index_dir).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "failed to open tantivy index in {}: {err}",
+                index_dir.display()
+            ),
+        )
+    })?;
+    register_doc_text_analyzer(&index);
+    let schema = index.schema();
+    let title = get_tantivy_doc_field(&schema, "title")?;
+    let name = get_tantivy_doc_field(&schema, "name")?;
+    let signature = get_tantivy_doc_field(&schema, "signature")?;
+    let body_text = get_tantivy_doc_field(&schema, "body_text")?;
+    let doc_field = get_tantivy_doc_field(&schema, "doc")?;
+    let code_field = get_tantivy_doc_field(&schema, "code")?;
+
+    let reader = index.reader().map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("failed to create tantivy reader: {err}"),
+        )
+    })?;
+    let searcher = reader.searcher();
+    let search_fields = match scope {
+        SearchScope::All => vec![title, body_text, name, signature, doc_field, code_field],
+        SearchScope::Doc => vec![title, body_text, doc_field],
+    };
+    let mut query_parser = QueryParser::for_index(&index, search_fields);
+    query_parser.set_field_boost(title, 4.0);
+    query_parser.set_field_boost(name, 4.0);
+    query_parser.set_field_boost(doc_field, 2.0);
+    query_parser.set_field_boost(signature, 2.0);
+    query_parser.set_field_boost(body_text, 2.0);
+    query_parser.set_field_boost(code_field, 1.0);
+    let parsed_query = query_parser.parse_query(query).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("failed to parse query '{query}': {err}"),
+        )
+    })?;
+    let record_type = get_tantivy_doc_field(&schema, "record_type")?;
+    let file_path = get_tantivy_doc_field(&schema, "file_path")?;
+    let kind = get_tantivy_doc_field(&schema, "kind")?;
+    let line_start = schema.get_field("line_start").ok();
+    let line_end = schema.get_field("line_end").ok();
+    let heading_line = schema.get_field("heading_line").ok();
+    let limit = usize::try_from(limit).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "tantivy search limit is too large for this platform",
+        )
+    })?;
+    let top_docs = searcher
+        .search(&parsed_query, &TopDocs::with_limit(limit))
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("failed to execute tantivy query '{query}': {err}"),
+            )
+        })?;
+    let explain_count = top_docs.len().min(3);
+    let mut hits_with_explanations = Vec::with_capacity(top_docs.len());
+    for (idx, (score, doc_address)) in top_docs.into_iter().enumerate() {
+        let retrieved: TantivyDocument = searcher.doc(doc_address).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("failed to read tantivy document: {err}"),
+            )
+        })?;
+        let get_text = |field| {
+            retrieved
+                .get_first(field)
+                .and_then(|value| value.as_str())
+                .map(ToOwned::to_owned)
+        };
+        let explanation = if explain && idx < explain_count {
+            Some(
+                parsed_query
+                    .explain(&searcher, doc_address)
+                    .map(|result| format!("{result:#?}"))
+                    .map_err(|err| {
+                        io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("failed to explain tantivy hit: {err}"),
+                        )
+                    })?,
+            )
+        } else {
+            None
+        };
+        hits_with_explanations.push(SearchHitWithExplanation {
+            hit: SearchHit {
+                score,
+                record_type: get_text(record_type).unwrap_or_default(),
+                file_path: get_text(file_path).unwrap_or_default(),
+                title: get_text(title),
+                name: get_text(name),
+                kind: get_text(kind),
+                signature: get_text(signature),
+                line_start: line_start
+                    .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
+                line_end: line_end
+                    .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
+                heading_line: heading_line
+                    .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
+            },
+            explanation,
+        });
+    }
+
+    Ok(hits_with_explanations)
+}
+
 // TODO: we call this function for every Rust symbol. Better to go through the files, and
 // index the code snippets
 fn extract_code_snippet(project_root: &Path, entry: &IndexEntry) -> AppResult<Option<String>> {
@@ -920,7 +1077,8 @@ fn extract_code_snippet(project_root: &Path, entry: &IndexEntry) -> AppResult<Op
 mod tests {
     use super::{
         SearchRecord, SearchScope, extract_code_snippet, get_tantivy_doc_field,
-        search_tantivy_index, update_tantivy_index, write_tantivy_index,
+        search_tantivy_index, search_tantivy_index_with_explain, update_tantivy_index,
+        write_tantivy_index,
     };
     use markdown2json::{CodeBlock, Section};
     use rust2json::IndexEntry;
@@ -1340,6 +1498,79 @@ mod tests {
 
         assert!(!hits.is_empty());
         assert_eq!(hits[0].file_path, "src/lib.rs");
+
+        let _ = fs::remove_dir_all(&output_dir);
+    }
+
+    #[test]
+    fn search_tantivy_index_with_explain_limits_explanations_to_top_three() {
+        let output_dir = temp_path("search-index-with-explain");
+        let records = vec![
+            SearchRecord::MarkdownSection {
+                file_path: "one.md".to_string(),
+                section: Section {
+                    title: "One".to_string(),
+                    level: 1,
+                    body_text: vec!["quickstart".to_string()],
+                    code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
+                },
+            },
+            SearchRecord::MarkdownSection {
+                file_path: "two.md".to_string(),
+                section: Section {
+                    title: "Two".to_string(),
+                    level: 1,
+                    body_text: vec!["quickstart".to_string()],
+                    code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
+                },
+            },
+            SearchRecord::MarkdownSection {
+                file_path: "three.md".to_string(),
+                section: Section {
+                    title: "Three".to_string(),
+                    level: 1,
+                    body_text: vec!["quickstart".to_string()],
+                    code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
+                },
+            },
+            SearchRecord::MarkdownSection {
+                file_path: "four.md".to_string(),
+                section: Section {
+                    title: "Four".to_string(),
+                    level: 1,
+                    body_text: vec!["quickstart".to_string()],
+                    code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
+                },
+            },
+        ];
+        write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
+
+        let hits = search_tantivy_index_with_explain(
+            &output_dir,
+            "quickstart",
+            10,
+            SearchScope::All,
+            true,
+        )
+        .expect("search should succeed");
+
+        assert_eq!(hits.len(), 4);
+        assert!(hits[0].explanation.is_some());
+        assert!(hits[1].explanation.is_some());
+        assert!(hits[2].explanation.is_some());
+        assert!(hits[3].explanation.is_none());
 
         let _ = fs::remove_dir_all(&output_dir);
     }
