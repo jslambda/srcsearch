@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand, ValueEnum};
 
 use srcsearch::{
-    SearchHit, SearchScope, index_project, index_target, search_tantivy_index,
-    update_tantivy_index, write_json, write_tantivy_index,
+    SearchHit, SearchHitWithExplanation, SearchScope, index_project, index_target,
+    search_tantivy_index_with_explain, update_tantivy_index, write_json, write_tantivy_index,
 };
 
 #[derive(Clone, Debug, ValueEnum, PartialEq, Eq)]
@@ -30,7 +30,8 @@ const CLI_USAGE_HELP: &str = concat!(
     "  srcsearch index -p . -o index\n",
     "  srcsearch update --project-root . --index-dir index --changed-file src/lib.rs\n",
     "  srcsearch search --index-dir index --query quickstart --scope doc\n",
-    "  srcsearch search -i index -q quickstart -s doc",
+    "  srcsearch search -i index -q quickstart -s doc\n",
+    "  srcsearch search -i index -q quickstart --explain",
 );
 
 #[derive(Debug, Parser)]
@@ -99,6 +100,8 @@ enum Commands {
         scope: SearchScopeArg,
         #[arg(long)]
         json: bool,
+        #[arg(long, help = "Show Tantivy score explanations for the top three hits")]
+        explain: bool,
     },
 }
 
@@ -152,6 +155,23 @@ fn format_search_hits(hits: &[SearchHit]) -> String {
     output
 }
 
+/// Formats search hits and, when present, appends Tantivy score explanations.
+fn format_search_hits_with_explanations(hits: &[SearchHitWithExplanation]) -> String {
+    if hits.is_empty() {
+        return "No results found.\n".to_string();
+    }
+    let base_hits: Vec<SearchHit> = hits.iter().map(|item| item.hit.clone()).collect();
+    let mut output = format_search_hits(&base_hits);
+    for item in hits {
+        if let Some(explanation) = &item.explanation {
+            output.push_str("--- explanation ---\n");
+            output.push_str(explanation);
+            output.push('\n');
+        }
+    }
+    output
+}
+
 /// Parses CLI arguments and dispatches to indexing, update, or search workflows.
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
@@ -199,12 +219,19 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             limit,
             scope,
             json,
+            explain,
         } => {
-            let hits = search_tantivy_index(&index_dir, &query, limit, scope.into())?;
+            let hits = search_tantivy_index_with_explain(
+                &index_dir,
+                &query,
+                limit,
+                scope.into(),
+                explain,
+            )?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&hits)?);
             } else {
-                print!("{}", format_search_hits(&hits));
+                print!("{}", format_search_hits_with_explanations(&hits));
             }
         }
     }
@@ -382,12 +409,14 @@ mod tests {
                 limit,
                 scope,
                 json,
+                explain,
             } => {
                 assert_eq!(index_dir, PathBuf::from("index"));
                 assert_eq!(query, "quickstart");
                 assert_eq!(limit, 10);
                 assert_eq!(scope, SearchScopeArg::All);
                 assert!(!json);
+                assert!(!explain);
             }
             Commands::Json { .. } | Commands::Index { .. } | Commands::Update { .. } => {
                 panic!("expected search subcommand")
@@ -415,12 +444,14 @@ mod tests {
                 limit,
                 scope,
                 json,
+                explain,
             } => {
                 assert_eq!(index_dir, PathBuf::from("index"));
                 assert_eq!(query, "tantivy");
                 assert_eq!(limit, 5);
                 assert_eq!(scope, SearchScopeArg::All);
                 assert!(!json);
+                assert!(!explain);
             }
             Commands::Json { .. } | Commands::Index { .. } | Commands::Update { .. } => {
                 panic!("expected search subcommand")
@@ -532,6 +563,26 @@ mod tests {
     }
 
     #[test]
+    fn parses_search_explain_flag() {
+        let cli = Cli::parse_from([
+            "srcsearch",
+            "search",
+            "--index-dir",
+            "index",
+            "--query",
+            "quickstart",
+            "--explain",
+        ]);
+
+        match cli.command {
+            Commands::Search { explain, .. } => assert!(explain),
+            Commands::Json { .. } | Commands::Index { .. } | Commands::Update { .. } => {
+                panic!("expected search subcommand")
+            }
+        }
+    }
+
+    #[test]
     fn formats_empty_search_results() {
         assert_eq!(format_search_hits(&[]), "No results found.\n");
     }
@@ -602,5 +653,6 @@ mod tests {
         assert!(help.contains("srcsearch index -p . -o index"));
         assert!(help.contains("srcsearch search --index-dir index --query quickstart --scope doc"));
         assert!(help.contains("srcsearch search -i index -q quickstart -s doc"));
+        assert!(help.contains("srcsearch search -i index -q quickstart --explain"));
     }
 }
