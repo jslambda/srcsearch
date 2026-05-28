@@ -758,7 +758,15 @@ pub fn get_tantivy_doc_field(schema: &Schema, field_name: &str) -> AppResult<Fie
         .into()
     })
 }
-
+pub fn search_tantivy_index(
+    index_dir: &Path,
+    query: &str,
+    limit: i64,
+    scope: SearchScope,
+) -> AppResult<Vec<SearchHit>> {
+    search_tantivy_index_with_explain(index_dir, query, limit, scope, false)
+        .map(|hits| hits.into_iter().map(|entry| entry.hit).collect())
+}
 /// Executes search and optionally attaches Tantivy score explanations for the top results.
 pub fn search_tantivy_index_with_explain(
     index_dir: &Path,
@@ -940,7 +948,8 @@ fn extract_code_snippet(project_root: &Path, entry: &IndexEntry) -> AppResult<Op
 mod tests {
     use super::{
         SearchRecord, SearchScope, extract_code_snippet, get_tantivy_doc_field,
-        search_tantivy_index_with_explain, update_tantivy_index, write_tantivy_index,
+        search_tantivy_index, search_tantivy_index_with_explain, update_tantivy_index,
+        write_tantivy_index,
     };
     use markdown2json::{CodeBlock, Section};
     use rust2json::IndexEntry;
@@ -956,16 +965,6 @@ mod tests {
             .expect("system time should be after unix epoch")
             .as_nanos();
         std::env::temp_dir().join(format!("rustearch-{test_name}-{unique}"))
-    }
-
-    fn search_hits(
-        index_dir: &Path,
-        query: &str,
-        limit: i64,
-        scope: SearchScope,
-    ) -> super::AppResult<Vec<super::SearchHit>> {
-        search_tantivy_index_with_explain(index_dir, query, limit, scope, false)
-            .map(|hits| hits.into_iter().map(|entry| entry.hit).collect())
     }
 
     #[test]
@@ -1045,12 +1044,12 @@ mod tests {
         )
         .expect("index update should succeed");
 
-        let old_hits =
-            search_hits(&output_dir, "old", 10, SearchScope::All).expect("search should succeed");
+        let old_hits = search_tantivy_index(&output_dir, "old", 10, SearchScope::All)
+            .expect("search should succeed");
         assert!(old_hits.is_empty());
 
-        let new_hits =
-            search_hits(&output_dir, "new", 10, SearchScope::All).expect("search should succeed");
+        let new_hits = search_tantivy_index(&output_dir, "new", 10, SearchScope::All)
+            .expect("search should succeed");
         assert_eq!(new_hits.len(), 1);
         assert_eq!(new_hits[0].title.as_deref(), Some("New title"));
 
@@ -1078,8 +1077,8 @@ mod tests {
         update_tantivy_index(&[], &output_dir, None, &["README.md".to_string()])
             .expect("index update should succeed");
 
-        let hits =
-            search_hits(&output_dir, "old", 10, SearchScope::All).expect("search should succeed");
+        let hits = search_tantivy_index(&output_dir, "old", 10, SearchScope::All)
+            .expect("search should succeed");
         assert!(hits.is_empty());
 
         let _ = fs::remove_dir_all(&output_dir);
@@ -1152,7 +1151,7 @@ mod tests {
         ];
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
 
-        let markdown_hits = search_hits(&output_dir, "quickstart", 10, SearchScope::All)
+        let markdown_hits = search_tantivy_index(&output_dir, "quickstart", 10, SearchScope::All)
             .expect("search should succeed");
 
         assert_eq!(markdown_hits.len(), 1);
@@ -1163,8 +1162,9 @@ mod tests {
         assert_eq!(markdown_hits[0].line_end, None);
         assert_eq!(markdown_hits[0].heading_line, None);
 
-        let rust_hits = search_hits(&output_dir, "search_tantivy_index", 10, SearchScope::All)
-            .expect("search should succeed");
+        let rust_hits =
+            search_tantivy_index(&output_dir, "search_tantivy_index", 10, SearchScope::All)
+                .expect("search should succeed");
         assert_eq!(rust_hits.len(), 1);
         assert_eq!(rust_hits[0].record_type, "rust");
         assert_eq!(rust_hits[0].line_start, Some(100));
@@ -1203,11 +1203,12 @@ mod tests {
         ];
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
 
-        let code_hits = search_hits(&output_dir, "search_tantivy_index", 10, SearchScope::Doc)
-            .expect("search should succeed");
+        let code_hits =
+            search_tantivy_index(&output_dir, "search_tantivy_index", 10, SearchScope::Doc)
+                .expect("search should succeed");
         assert!(code_hits.is_empty());
 
-        let docs_hits = search_hits(&output_dir, "quickstart", 10, SearchScope::Doc)
+        let docs_hits = search_tantivy_index(&output_dir, "quickstart", 10, SearchScope::Doc)
             .expect("search should succeed");
         assert_eq!(docs_hits.len(), 1);
         assert_eq!(docs_hits[0].record_type, "markdown");
@@ -1233,7 +1234,7 @@ mod tests {
 
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
 
-        let hits = search_hits(&output_dir, "library", 10, SearchScope::Doc)
+        let hits = search_tantivy_index(&output_dir, "library", 10, SearchScope::Doc)
             .expect("search should succeed");
 
         assert_eq!(hits.len(), 1);
@@ -1260,7 +1261,7 @@ mod tests {
 
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
 
-        let hits = search_hits(&output_dir, "quickly", 10, SearchScope::All)
+        let hits = search_tantivy_index(&output_dir, "quickly", 10, SearchScope::All)
             .expect("search should succeed");
 
         assert_eq!(hits.len(), 1);
@@ -1304,7 +1305,7 @@ mod tests {
 
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
 
-        let hits = search_hits(&output_dir, "boost target", 10, SearchScope::All)
+        let hits = search_tantivy_index(&output_dir, "boost target", 10, SearchScope::All)
             .expect("search should succeed");
 
         assert_eq!(hits.len(), 2);
@@ -1363,7 +1364,7 @@ mod tests {
         records.push(rust_record);
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
 
-        let hits = search_hits(&output_dir, "boost_target", 10, SearchScope::All)
+        let hits = search_tantivy_index(&output_dir, "boost_target", 10, SearchScope::All)
             .expect("search should succeed");
 
         assert!(!hits.is_empty());
@@ -1504,7 +1505,7 @@ mod tests {
             .wait_merging_threads()
             .expect("merge threads should finish");
 
-        let hits = search_hits(&output_dir, "quickstart", 5, SearchScope::All)
+        let hits = search_tantivy_index(&output_dir, "quickstart", 5, SearchScope::All)
             .expect("search should succeed");
 
         assert_eq!(hits.len(), 1);
