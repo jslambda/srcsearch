@@ -7,7 +7,7 @@
 //!
 //! 1. Build records with [`index_project`] (or [`index_target`] for incremental work).
 //! 2. Persist results via [`write_json`] or [`write_tantivy_index`].
-//! 3. Query with [`search_tantivy_index`].
+//! 3. Query with [`search_tantivy_index_with_explain`] (pass `false` for explanations when you only need hits).
 //!
 //! See the project README for CLI examples and end-to-end usage.
 
@@ -758,144 +758,15 @@ pub fn get_tantivy_doc_field(schema: &Schema, field_name: &str) -> AppResult<Fie
         .into()
     })
 }
-
-/// Executes a scoped full-text search over a Tantivy index and returns normalized hit metadata.
 pub fn search_tantivy_index(
     index_dir: &Path,
     query: &str,
     limit: i64,
     scope: SearchScope,
 ) -> AppResult<Vec<SearchHit>> {
-    if limit <= 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "tantivy search limit must be at least 1",
-        )
-        .into());
-    }
-
-    if !index_dir.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!(
-                "tantivy index directory does not exist: {}",
-                index_dir.display()
-            ),
-        )
-        .into());
-    }
-    if !index_dir.is_dir() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!(
-                "tantivy index path is not a directory: {}",
-                index_dir.display()
-            ),
-        )
-        .into());
-    }
-
-    let index = Index::open_in_dir(index_dir).map_err(|err| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "failed to open tantivy index in {}: {err}",
-                index_dir.display()
-            ),
-        )
-    })?;
-    register_doc_text_analyzer(&index);
-    let schema = index.schema();
-    let record_type = get_tantivy_doc_field(&schema, "record_type")?;
-    let file_path = get_tantivy_doc_field(&schema, "file_path")?;
-    let title = get_tantivy_doc_field(&schema, "title")?;
-    let name = get_tantivy_doc_field(&schema, "name")?;
-    let kind = get_tantivy_doc_field(&schema, "kind")?;
-    let signature = get_tantivy_doc_field(&schema, "signature")?;
-    let line_start = schema.get_field("line_start").ok();
-    let line_end = schema.get_field("line_end").ok();
-    let heading_line = schema.get_field("heading_line").ok();
-    let body_text = get_tantivy_doc_field(&schema, "body_text")?;
-    let doc_field = get_tantivy_doc_field(&schema, "doc")?;
-    let code_field = get_tantivy_doc_field(&schema, "code")?;
-
-    let reader = index.reader().map_err(|err| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("failed to create tantivy reader: {err}"),
-        )
-    })?;
-    let searcher = reader.searcher();
-    let search_fields = match scope {
-        SearchScope::All => vec![title, body_text, name, signature, doc_field, code_field],
-        SearchScope::Doc => vec![title, body_text, doc_field],
-    };
-    let mut query_parser = QueryParser::for_index(&index, search_fields);
-    query_parser.set_field_boost(title, 4.0);
-    query_parser.set_field_boost(name, 4.0);
-    query_parser.set_field_boost(doc_field, 2.0);
-    query_parser.set_field_boost(signature, 2.0);
-    query_parser.set_field_boost(body_text, 2.0);
-    query_parser.set_field_boost(code_field, 1.0);
-    let parsed_query = query_parser.parse_query(query).map_err(|err| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("failed to parse query '{query}': {err}"),
-        )
-    })?;
-
-    let limit = usize::try_from(limit).map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "tantivy search limit is too large for this platform",
-        )
-    })?;
-
-    let top_docs = searcher
-        .search(&parsed_query, &TopDocs::with_limit(limit))
-        .map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("failed to execute tantivy query '{query}': {err}"),
-            )
-        })?;
-
-    let mut hits = Vec::with_capacity(top_docs.len());
-    for (score, doc_address) in top_docs {
-        let retrieved: TantivyDocument = searcher.doc(doc_address).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("failed to read tantivy document: {err}"),
-            )
-        })?;
-
-        let get_text = |field| {
-            retrieved
-                .get_first(field)
-                .and_then(|value| value.as_str())
-                .map(ToOwned::to_owned)
-        };
-
-        hits.push(SearchHit {
-            score,
-            record_type: get_text(record_type).unwrap_or_default(),
-            file_path: get_text(file_path).unwrap_or_default(),
-            title: get_text(title),
-            name: get_text(name),
-            kind: get_text(kind),
-            signature: get_text(signature),
-            line_start: line_start
-                .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
-            line_end: line_end
-                .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
-            heading_line: heading_line
-                .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
-        });
-    }
-
-    Ok(hits)
+    search_tantivy_index_with_explain(index_dir, query, limit, scope, false)
+        .map(|hits| hits.into_iter().map(|entry| entry.hit).collect())
 }
-
 /// Executes search and optionally attaches Tantivy score explanations for the top results.
 pub fn search_tantivy_index_with_explain(
     index_dir: &Path,
@@ -1651,7 +1522,13 @@ mod tests {
     fn search_tantivy_index_fails_for_missing_directory() {
         let missing_dir = temp_path("missing-search-index");
 
-        let result = search_tantivy_index(&missing_dir, "anything", 10, SearchScope::All);
+        let result = search_tantivy_index_with_explain(
+            &missing_dir,
+            "anything",
+            10,
+            SearchScope::All,
+            false,
+        );
 
         assert!(result.is_err());
         let message = format!("{}", result.expect_err("should fail"));
@@ -1675,7 +1552,13 @@ mod tests {
         }];
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
 
-        let result = search_tantivy_index(&output_dir, "quickstart", -1, SearchScope::All);
+        let result = search_tantivy_index_with_explain(
+            &output_dir,
+            "quickstart",
+            -1,
+            SearchScope::All,
+            false,
+        );
 
         assert!(result.is_err());
         let message = format!("{}", result.expect_err("negative limit should fail"));
@@ -1701,7 +1584,13 @@ mod tests {
         }];
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
 
-        let result = search_tantivy_index(&output_dir, "quickstart", 0, SearchScope::All);
+        let result = search_tantivy_index_with_explain(
+            &output_dir,
+            "quickstart",
+            0,
+            SearchScope::All,
+            false,
+        );
 
         assert!(result.is_err());
         let message = format!("{}", result.expect_err("zero limit should fail"));
