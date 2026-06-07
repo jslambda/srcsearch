@@ -2,9 +2,12 @@
 set -eu
 
 json_flag=""
+explain_flag=""
 
 if [ "$#" -eq 2 ] && [ "$2" = "--json" ]; then
   json_flag="--json"
+elif [ "$#" -eq 2 ] && [ "$2" = "--explain" ]; then
+  explain_flag="--explain"
 fi
 
 if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
@@ -13,4 +16,4 @@ if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
   exit 2
 fi
 
-srcsearch search -i .srcsearch -q "$1" $json_flag
+srcsearch search -i .srcsearch -q "$1" $json_flag $explain_flag
