@@ -4,6 +4,7 @@ import json
 import re
 from collections import defaultdict
 import sys
+from typing import Any
 
 
 TERM_RE = re.compile(r'Term=Term\(field=(\d+), type=\w+, "([^"]+)"\)')
@@ -117,7 +118,7 @@ def get_boost(node: dict) -> float:
     return 1.0
 
 
-def get_base_score(node: dict) -> float:
+def get_base_score(node: dict) -> Any:
     """
     If this is a Boost node, the first child is usually the unboosted score.
     Otherwise the node value itself is the base score.
