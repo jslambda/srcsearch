@@ -1,6 +1,7 @@
- - Add relevant unit tests
+ - Add relevant unit tests for changes in the source code.
  - Runt `cargo test` to verify
  - Run `carg fmt` at the end
  - Do not add any new dependency unless it is explicitly requested in the prompt
  - Update the existing comments as you change the code
+ - Update README.md when either public API or command line interface is changed.
  - Do not add tests when updating documentation.
