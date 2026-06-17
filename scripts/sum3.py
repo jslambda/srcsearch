@@ -11,7 +11,7 @@ TERM_RE = re.compile(r'Term=Term\(field=(\d+), type=\w+, "([^"]+)"\)')
 BOOST_RE = re.compile(r"Boost x([0-9.]+) of")
 
 
-def extract_explanations(text: str) -> list[dict]:
+def extract_explanations(text: str) -> tuple[list[dict],list[str]]:
     """
     Extract JSON objects from Tantivy-style:
 
@@ -24,12 +24,14 @@ def extract_explanations(text: str) -> list[dict]:
     explanations = []
     marker = "Explanation("
     i = 0
+    rr = 0
+    main_rows = []
 
     while True:
         start = text.find(marker, i)
         if start == -1:
             break
-
+        main_row = text[rr:start]
         j = start + len(marker)
 
         while j < len(text) and text[j].isspace():
@@ -63,12 +65,14 @@ def extract_explanations(text: str) -> list[dict]:
                     if depth == 0:
                         raw_json = text[j : k + 1]
                         explanations.append(json.loads(raw_json))
+                        main_rows.append(main_row)
                         i = k + 1
+                        rr = i
                         break
         else:
             raise ValueError("Unclosed Explanation({...}) block")
 
-    return explanations
+    return explanations,main_rows
 
 
 def find_metric(node: dict, description_prefix: str):
@@ -128,7 +132,7 @@ def get_base_score(node: dict) -> Any:
     return node.get("value")
 
 
-def summarize_explanation(exp: dict, explanation_index: int) -> list[dict]:
+def summarize_explanation(exp: dict) -> list[dict]:
     total = exp["value"]
     rows = []
 
@@ -147,7 +151,6 @@ def summarize_explanation(exp: dict, explanation_index: int) -> list[dict]:
 
         rows.append(
             {
-                "explanation": explanation_index,
                 "clause": clause_index,
                 "term": term,
                 "field": field,
@@ -166,47 +169,22 @@ def summarize_explanation(exp: dict, explanation_index: int) -> list[dict]:
 
     return rows
 
-
-def print_table(rows: list[dict]) -> None:
-    headers = [
-        "expl",
-        "term",
-        "field",
-        "score",
-        "%",
-        "boost",
-        "base",
-        "freq",
-        "idf",
-        "dl",
-        "avgdl",
-        "n",
-    ]
-
+def print_header():
     print(
-        f"{headers[0]:>4}  {headers[1]:<12} {headers[2]:>5} "
-        f"{headers[3]:>9} {headers[4]:>7} {headers[5]:>6} "
-        f"{headers[6]:>9} {headers[7]:>6} {headers[8]:>8} "
-        f"{headers[9]:>7} {headers[10]:>9} {headers[11]:>7}"
+        f"{'term':<12} "
+        f"{'field':>5} "
+        f"{'score':>9} "
+        f"{'percent':>7} "
+        f"{'boost':>6} "
+        f"{'base':>9} "
+        f"{'freq':>6} "
+        f"{'idf':>8} "
+        f"{'dl':>7} "
+        f"{'avgdl':>9} "
+        f"{'n':>7}"
     )
 
-    print("-" * 110)
 
-    for r in rows:
-        print(
-            f"{r['explanation']:>4}  "
-            f"{str(r['term']):<12} "
-            f"{str(r['field']):>5} "
-            f"{r['score']:>9.3f} "
-            f"{r['percent']:>6.1f}% "
-            f"{r['boost']:>6.1f} "
-            f"{r['base_score']:>9.3f} "
-            f"{str(r['freq']):>6} "
-            f"{r['idf']:>8.3f} "
-            f"{str(r['dl']):>7} "
-            f"{r['avgdl']:>9.3f} "
-            f"{str(r['n']):>7}"
-        )
 
 
 def print_grouped_summary(rows: list[dict]) -> None:
@@ -226,26 +204,28 @@ def print_grouped_summary(rows: list[dict]) -> None:
         print(f"  field {field:<4} {score:.3f}")
 
 def main() -> None:
-
+    print_header()
     text = sys.stdin.read().strip()
-    explanations = extract_explanations(text)
-
-    if not explanations:
-        raise SystemExit("No Explanation({...}) blocks found")
-
-    all_rows = []
-
-    for i, exp in enumerate(explanations, start=1):
-        print(f"\nExplanation #{i}")
-        print(f"Total score: {exp['value']:.3f}")
-        print(f"Description: {exp.get('description', '')}")
-
-        rows = summarize_explanation(exp, i)
-        print_table(rows)
-        print_grouped_summary(rows)
-
-        all_rows.extend(rows)
-
-
+    hits = json.loads(text)
+    exp_indicator = "Explanation("
+    for hit in hits:
+        expl = hit.get('explanation')
+        if isinstance(expl,str):
+            start = expl.find(exp_indicator) + len(exp_indicator)
+            for r in summarize_explanation(json.loads(expl[start:-1])):
+                print(
+                            f"{str(r['term']):<12} "
+                            f"{str(r['field']):>5} "
+                            f"{r['score']:>9.3f} "
+                            f"{r['percent']:>6.1f}% "
+                            f"{r['boost']:>6.1f} "
+                            f"{r['base_score']:>9.3f} "
+                            f"{str(r['freq']):>6} "
+                            f"{r['idf']:>8.3f} "
+                            f"{str(r['dl']):>7} "
+                            f"{r['avgdl']:>9.3f} "
+                            f"{str(r['n']):>7}"
+                        )
+            print('-----------------')
 if __name__ == "__main__":
     main()
