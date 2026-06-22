@@ -206,7 +206,7 @@ def print_grouped_summary(rows: list[dict]) -> None:
 def main() -> None:
     print_header()
     text = sys.stdin.read().strip()
-    hits = json.loads(text)
+    hits = json.loads(text)[0]
     exp_indicator = "Explanation("
     for hit in hits:
         expl = hit.get('explanation')
