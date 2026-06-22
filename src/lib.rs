@@ -56,7 +56,7 @@ pub struct SearchHitWithExplanation {
     pub hit: SearchHit,
     pub explanation: Option<String>,
 }
-
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SearchResultFieldMapping {
     pub field_index: u32,
     pub field_name: String,
@@ -770,7 +770,7 @@ pub fn search_tantivy_index(
     scope: SearchScope,
 ) -> AppResult<Vec<SearchHit>> {
     search_tantivy_index_with_explain(index_dir, query, limit, scope, false)
-        .map(|hits| hits.into_iter().map(|entry| entry.0.hit).collect())
+        .map(|hits| hits.0.into_iter().map(|entry| entry.hit).collect())
 }
 /// Executes search and optionally attaches Tantivy score explanations for the top results.
 pub fn search_tantivy_index_with_explain(
@@ -1449,11 +1449,11 @@ mod tests {
         )
         .expect("search should succeed");
 
-        assert_eq!(hits.len(), 4);
-        assert!(hits[0].explanation.is_some());
-        assert!(hits[1].explanation.is_some());
-        assert!(hits[2].explanation.is_some());
-        assert!(hits[3].explanation.is_none());
+        assert_eq!(hits.0.len(), 4);
+        assert!(hits.0[0].explanation.is_some());
+        assert!(hits.0[1].explanation.is_some());
+        assert!(hits.0[2].explanation.is_some());
+        assert!(hits.0[3].explanation.is_none());
 
         let _ = fs::remove_dir_all(&output_dir);
     }

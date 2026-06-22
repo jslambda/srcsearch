@@ -231,7 +231,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             if json {
                 println!("{}", serde_json::to_string_pretty(&hits)?);
             } else {
-                print!("{}", format_search_hits_with_explanations(&hits));
+                print!("{}", format_search_hits_with_explanations(&hits.0));
             }
         }
     }

@@ -127,14 +127,14 @@ fn doc_scope_search_ignores_code_and_signature_matches()
     let all_hits =
         search_tantivy_index_with_explain(&output_dir, "i32", 10, SearchScope::All, false)?;
     assert!(
-        !all_hits.is_empty(),
+        !all_hits.0.is_empty(),
         "expected a code/signature hit in all scope"
     );
 
     let doc_hits =
         search_tantivy_index_with_explain(&output_dir, "i32", 10, SearchScope::Doc, false)?;
     assert!(
-        doc_hits.is_empty(),
+        doc_hits.0.is_empty(),
         "did not expect code/signature-only query to match in doc scope"
     );
 
