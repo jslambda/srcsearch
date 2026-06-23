@@ -207,8 +207,7 @@ def main() -> None:
 
     text = sys.stdin.read().strip()
     parsed_body = json.loads(text)
-    hits = parsed_body[0]
-    field_mappings = parsed_body[1]
+    [hits, field_mappings] = parsed_body
     print(field_mappings)
     print_header()
     exp_indicator = "Explanation("
