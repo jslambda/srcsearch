@@ -108,7 +108,7 @@ def summarize_explanation(exp: dict) -> list[dict]:
 def print_header():
     print(
         f"{'term':<12} "
-        f"{'field':>5} "
+        f"{'field':>12} "
         f"{'score':>9} "
         f"{'percent':>7} "
         f"{'boost':>6} "
