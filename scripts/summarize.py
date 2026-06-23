@@ -24,7 +24,6 @@ def extract_explanations(text: str) -> tuple[list[dict],list[str]]:
     explanations = []
     marker = "Explanation("
     i = 0
-    rr = 0
     main_rows = []
 
     while True:
@@ -67,7 +66,6 @@ def extract_explanations(text: str) -> tuple[list[dict],list[str]]:
                         explanations.append(json.loads(raw_json))
                         main_rows.append(main_row)
                         i = k + 1
-                        rr = i
                         break
         else:
             raise ValueError("Unclosed Explanation({...}) block")
@@ -211,9 +209,6 @@ def main() -> None:
     field_name_by_index = dict()
     for entry in field_mappings:
         field_name_by_index[entry['field_index']]=entry['field_name']
-    print(field_mappings)
-    print('==============')
-    print(field_name_by_index)
     print_header()
     exp_indicator = "Explanation("
     for hit in hits:
