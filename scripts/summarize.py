@@ -204,9 +204,13 @@ def print_grouped_summary(rows: list[dict]) -> None:
         print(f"  field {field:<4} {score:.3f}")
 
 def main() -> None:
-    print_header()
+
     text = sys.stdin.read().strip()
-    hits = json.loads(text)[0]
+    parsed_body = json.loads(text)
+    hits = parsed_body[0]
+    field_mappings = parsed_body[1]
+    print(field_mappings)
+    print_header()
     exp_indicator = "Explanation("
     for hit in hits:
         expl = hit.get('explanation')
