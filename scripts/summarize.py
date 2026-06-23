@@ -208,7 +208,12 @@ def main() -> None:
     text = sys.stdin.read().strip()
     parsed_body = json.loads(text)
     [hits, field_mappings] = parsed_body
+    field_name_by_index = dict()
+    for entry in field_mappings:
+        field_name_by_index[entry['field_index']]=entry['field_name']
     print(field_mappings)
+    print('==============')
+    print(field_name_by_index)
     print_header()
     exp_indicator = "Explanation("
     for hit in hits:
@@ -218,7 +223,7 @@ def main() -> None:
             for r in summarize_explanation(json.loads(expl[start:-1])):
                 print(
                             f"{str(r['term']):<12} "
-                            f"{str(r['field']):>5} "
+                            f"{field_name_by_index.get(r['field']):>12} "
                             f"{r['score']:>9.3f} "
                             f"{r['percent']:>6.1f}% "
                             f"{r['boost']:>6.1f} "
