@@ -11,68 +11,6 @@ TERM_RE = re.compile(r'Term=Term\(field=(\d+), type=\w+, "([^"]+)"\)')
 BOOST_RE = re.compile(r"Boost x([0-9.]+) of")
 
 
-def extract_explanations(text: str) -> tuple[list[dict],list[str]]:
-    """
-    Extract JSON objects from Tantivy-style:
-
-        Explanation({
-          "value": ...
-        })
-
-    Handles nested JSON braces and strings.
-    """
-    explanations = []
-    marker = "Explanation("
-    i = 0
-    main_rows = []
-
-    while True:
-        start = text.find(marker, i)
-        if start == -1:
-            break
-        main_row = text[rr:start]
-        j = start + len(marker)
-
-        while j < len(text) and text[j].isspace():
-            j += 1
-
-        if j >= len(text) or text[j] != "{":
-            i = j
-            continue
-
-        depth = 0
-        in_string = False
-        escaped = False
-
-        for k in range(j, len(text)):
-            ch = text[k]
-
-            if in_string:
-                if escaped:
-                    escaped = False
-                elif ch == "\\":
-                    escaped = True
-                elif ch == '"':
-                    in_string = False
-            else:
-                if ch == '"':
-                    in_string = True
-                elif ch == "{":
-                    depth += 1
-                elif ch == "}":
-                    depth -= 1
-                    if depth == 0:
-                        raw_json = text[j : k + 1]
-                        explanations.append(json.loads(raw_json))
-                        main_rows.append(main_row)
-                        i = k + 1
-                        break
-        else:
-            raise ValueError("Unclosed Explanation({...}) block")
-
-    return explanations,main_rows
-
-
 def find_metric(node: dict, description_prefix: str):
     """
     Find a nested node by the beginning of its description.
