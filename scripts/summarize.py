@@ -73,7 +73,6 @@ def summarize_explanation(exp: dict) -> list[dict]:
     rows = []
 
     for clause_index, clause in enumerate(exp.get("details", []), start=1):
-        # print("**** ", clause_index, clause)
         term_info = find_term_context(clause)
 
         if term_info is None:
