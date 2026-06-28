@@ -7,7 +7,7 @@ import sys
 from typing import Any
 
 
-TERM_RE = re.compile(r'Term=Term\(field=(\d+), type=\w+, "([^"]+)"\)')
+TERM_RE = re.compile(r'Term=Term\(field=([a-zA-Z]+), type=\w+, "([^"]+)"\)')
 BOOST_RE = re.compile(r"Boost x([0-9.]+) of")
 
 
@@ -41,7 +41,7 @@ def find_term_context(node: dict):
     for ctx in node.get("context", []) or []:
         match = TERM_RE.search(ctx)
         if match:
-            return int(match.group(1)), match.group(2)
+            return (match.group(1)), match.group(2)
 
     for child in node.get("details", []):
         result = find_term_context(child)
@@ -73,6 +73,7 @@ def summarize_explanation(exp: dict) -> list[dict]:
     rows = []
 
     for clause_index, clause in enumerate(exp.get("details", []), start=1):
+        # print("**** ", clause_index, clause)
         term_info = find_term_context(clause)
 
         if term_info is None:
