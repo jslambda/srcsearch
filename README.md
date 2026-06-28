@@ -92,7 +92,7 @@ Explain top scores:
 cargo run -- search --index-dir index --query quickstart --json --explain
 ```
 
-`--explain` asks Tantivy for score explanations for the top three returned hits. The flag is most useful with `--json`, where each result includes the regular `hit` payload plus an `explanation` string. Hits after the top three have `null` explanations so large result sets stay compact. Without `--json`, `srcsearch` prints a human-readable explanation block after each explained hit.
+`--explain` asks Tantivy for score explanations for the top three returned hits. The flag is most useful with `--json`, where each result includes the regular `hit` payload plus an `explanation` string. Hits after the top three have `null` explanations so large result sets stay compact. 
 
 Example JSON result payload:
 
