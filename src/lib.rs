@@ -56,6 +56,11 @@ pub struct SearchHitWithExplanation {
     pub hit: SearchHit,
     pub explanation: Option<String>,
 }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SearchResultFieldMapping {
+    pub field_index: u32,
+    pub field_name: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchScope {
@@ -765,7 +770,7 @@ pub fn search_tantivy_index(
     scope: SearchScope,
 ) -> AppResult<Vec<SearchHit>> {
     search_tantivy_index_with_explain(index_dir, query, limit, scope, false)
-        .map(|hits| hits.into_iter().map(|entry| entry.hit).collect())
+        .map(|hits| hits.0.into_iter().map(|entry| entry.hit).collect())
 }
 /// Executes search and optionally attaches Tantivy score explanations for the top results.
 pub fn search_tantivy_index_with_explain(
@@ -774,7 +779,7 @@ pub fn search_tantivy_index_with_explain(
     limit: i64,
     scope: SearchScope,
     explain: bool,
-) -> AppResult<Vec<SearchHitWithExplanation>> {
+) -> AppResult<(Vec<SearchHitWithExplanation>, Vec<SearchResultFieldMapping>)> {
     if limit <= 0 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -820,6 +825,13 @@ pub fn search_tantivy_index_with_explain(
     let body_text = get_tantivy_doc_field(&schema, "body_text")?;
     let doc_field = get_tantivy_doc_field(&schema, "doc")?;
     let code_field = get_tantivy_doc_field(&schema, "code")?;
+    let search_mappings = schema
+        .fields()
+        .map(|(field, field_entry)| SearchResultFieldMapping {
+            field_index: field.field_id(),
+            field_name: field_entry.name().to_string(),
+        })
+        .collect();
 
     let reader = index.reader().map_err(|err| {
         io::Error::new(
@@ -915,7 +927,7 @@ pub fn search_tantivy_index_with_explain(
         });
     }
 
-    Ok(hits_with_explanations)
+    Ok((hits_with_explanations, search_mappings))
 }
 
 // TODO: we call this function for every Rust symbol. Better to go through the files, and
@@ -1437,11 +1449,11 @@ mod tests {
         )
         .expect("search should succeed");
 
-        assert_eq!(hits.len(), 4);
-        assert!(hits[0].explanation.is_some());
-        assert!(hits[1].explanation.is_some());
-        assert!(hits[2].explanation.is_some());
-        assert!(hits[3].explanation.is_none());
+        assert_eq!(hits.0.len(), 4);
+        assert!(hits.0[0].explanation.is_some());
+        assert!(hits.0[1].explanation.is_some());
+        assert!(hits.0[2].explanation.is_some());
+        assert!(hits.0[3].explanation.is_none());
 
         let _ = fs::remove_dir_all(&output_dir);
     }

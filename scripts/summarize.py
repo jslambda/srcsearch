@@ -108,7 +108,7 @@ def summarize_explanation(exp: dict) -> list[dict]:
 def print_header():
     print(
         f"{'term':<12} "
-        f"{'field':>5} "
+        f"{'field':>12} "
         f"{'score':>9} "
         f"{'percent':>7} "
         f"{'boost':>6} "
@@ -140,9 +140,14 @@ def print_grouped_summary(rows: list[dict]) -> None:
         print(f"  field {field:<4} {score:.3f}")
 
 def main() -> None:
-    print_header()
+
     text = sys.stdin.read().strip()
-    hits = json.loads(text)
+    parsed_body = json.loads(text)
+    [hits, field_mappings] = parsed_body
+    field_name_by_index = dict()
+    for entry in field_mappings:
+        field_name_by_index[entry['field_index']]=entry['field_name']
+    print_header()
     exp_indicator = "Explanation("
     for hit in hits:
         expl = hit.get('explanation')
@@ -151,7 +156,7 @@ def main() -> None:
             for r in summarize_explanation(json.loads(expl[start:-1])):
                 print(
                             f"{str(r['term']):<12} "
-                            f"{str(r['field']):>5} "
+                            f"{field_name_by_index.get(r['field']):>12} "
                             f"{r['score']:>9.3f} "
                             f"{r['percent']:>6.1f}% "
                             f"{r['boost']:>6.1f} "
