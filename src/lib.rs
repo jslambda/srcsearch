@@ -12,6 +12,7 @@
 //! See the project README for CLI examples and end-to-end usage.
 
 use markdown2json::{CodeBlock, Section, index_markdown};
+use regex::Regex;
 use rust2json::{IndexEntry, build_file_index};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -881,17 +882,19 @@ pub fn search_tantivy_index_with_explain(
                 .map(ToOwned::to_owned)
         };
         let explanation = if explain && idx < explain_count {
-            Some(
-                parsed_query
-                    .explain(&searcher, doc_address)
-                    .map(|result| format!("{result:#?}"))
-                    .map_err(|err| {
-                        io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("failed to explain tantivy hit: {err}"),
-                        )
-                    })?,
-            )
+            let raw_explanation = parsed_query
+                .explain(&searcher, doc_address)
+                .map(|result| format!("{result:#?}"))
+                .map_err(|err| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("failed to explain tantivy hit: {err}"),
+                    )
+                })?;
+            Some(replace_explanation_field_indices(
+                &raw_explanation,
+                &schema,
+            )?)
         } else {
             None
         };
@@ -916,6 +919,33 @@ pub fn search_tantivy_index_with_explain(
     }
 
     Ok(hits_with_explanations)
+}
+
+/// Rewrites Tantivy explanation field identifiers to schema field names for readability.
+fn replace_explanation_field_indices(explanation: &str, schema: &Schema) -> AppResult<String> {
+    let field_regex = Regex::new(r"field=(\d+)").map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("failed to compile field replacement regex: {err}"),
+        )
+    })?;
+
+    Ok(field_regex
+        .replace_all(explanation, |captures: &regex::Captures<'_>| {
+            let Some(field_match) = captures.get(1) else {
+                return captures[0].to_string();
+            };
+            let Ok(field_id) = field_match.as_str().parse::<u32>() else {
+                return captures[0].to_string();
+            };
+            let field = Field::from_field_id(field_id);
+            if (field_id as usize) < schema.num_fields() {
+                format!("field={}", schema.get_field_name(field))
+            } else {
+                captures[0].to_string()
+            }
+        })
+        .into_owned())
 }
 
 // TODO: we call this function for every Rust symbol. Better to go through the files, and
@@ -948,8 +978,8 @@ fn extract_code_snippet(project_root: &Path, entry: &IndexEntry) -> AppResult<Op
 mod tests {
     use super::{
         SearchRecord, SearchScope, extract_code_snippet, get_tantivy_doc_field,
-        search_tantivy_index, search_tantivy_index_with_explain, update_tantivy_index,
-        write_tantivy_index,
+        replace_explanation_field_indices, search_tantivy_index, search_tantivy_index_with_explain,
+        update_tantivy_index, write_tantivy_index,
     };
     use markdown2json::{CodeBlock, Section};
     use rust2json::IndexEntry;
@@ -1444,6 +1474,22 @@ mod tests {
         assert!(hits[3].explanation.is_none());
 
         let _ = fs::remove_dir_all(&output_dir);
+    }
+
+    #[test]
+    fn replace_explanation_field_indices_uses_schema_field_names() {
+        let mut schema_builder = Schema::builder();
+        schema_builder.add_text_field("title", TEXT | STORED);
+        schema_builder.add_text_field("body_text", TEXT | STORED);
+        let schema = schema_builder.build();
+
+        let explanation = "TermQuery(Term(field=0, type=Str, text=quickstart)) and field=42";
+        let replaced = replace_explanation_field_indices(explanation, &schema)
+            .expect("field replacement should succeed");
+
+        assert!(replaced.contains("field=title"));
+        assert!(replaced.contains("field=42"));
+        assert!(!replaced.contains("field=0"));
     }
 
     #[test]
