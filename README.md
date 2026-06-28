@@ -86,6 +86,14 @@ JSON output:
 cargo run -- search --index-dir index --query quickstart --json
 ```
 
+Explain top scores:
+
+```bash
+cargo run -- search --index-dir index --query quickstart --json --explain
+```
+
+`--explain` asks Tantivy for score explanations for the top three returned hits. The flag is most useful with `--json`, where each result includes the regular `hit` payload plus an `explanation` string. Hits after the top three have `null` explanations so large result sets stay compact. 
+
 Example JSON result payload:
 
 ```json
@@ -158,6 +166,7 @@ The repository includes a few helper scripts under `scripts/` for common local w
 - `scripts/srcreindex` — remove `.srcsearch` and rebuild it from scratch.
 - `scripts/srcquery "<query>"` — run a regular search (`--scope all`) against `.srcsearch` (optionally add `--json`).
 - `scripts/srcdoc "<query>"` — run a docs-focused search (`--scope doc`) against `.srcsearch` (optionally add `--json`).
+- `scripts/summarize.py` — read `srcsearch search --json --explain` output from stdin and print a compact per-hit score breakdown.
 
 Typical usage:
 
@@ -165,6 +174,21 @@ Typical usage:
 scripts/srcindex
 scripts/srcquery "how does indexing work"
 scripts/srcdoc "search scope" --json
+srcsearch search -i .srcsearch -q index --json --explain | python3 scripts/summarize.py
+```
+
+`scripts/summarize.py` is intended for ranking diagnostics. It extracts each explained scoring clause and prints the query term, matched field, contributed score, percentage of the hit score, boost, unboosted base score, term frequency (`freq`), inverse document frequency (`idf`), document length (`dl`), average document length (`avgdl`), and matching document count (`n`). Rows are separated by `-----------------` between hits. A typical summary looks like:
+
+```text
+term         field     score percent  boost      base   freq      idf      dl     avgdl       n
+index        signature     2.987   38.2%    2.0     1.493    1.0    1.881     9.0     5.506    12.0
+index          doc     2.637   33.7%    2.0     1.319    1.0    2.267     8.0     2.901     8.0
+index         code     2.197   28.1%    1.0     2.197    2.0    1.250    24.0   106.728    23.0
+-----------------
+index        signature     3.259   43.7%    2.0     1.630    2.0    1.881    17.0     5.506    12.0
+index          doc     1.675   22.5%    2.0     0.838    1.0    2.267    15.0     2.901     8.0
+index         code     2.525   33.9%    1.0     2.525   30.0    1.250   280.0   106.728    23.0
+-----------------
 ```
 
 ---

@@ -108,7 +108,7 @@ def summarize_explanation(exp: dict) -> list[dict]:
 def print_header():
     print(
         f"{'term':<12} "
-        f"{'field':>5} "
+        f"{'field':<10} "
         f"{'score':>9} "
         f"{'percent':>7} "
         f"{'boost':>6} "
@@ -151,7 +151,7 @@ def main() -> None:
             for r in summarize_explanation(json.loads(expl[start:-1])):
                 print(
                             f"{str(r['term']):<12} "
-                            f"{str(r['field']):>5} "
+                            f"{str(r['field']):<10} "
                             f"{r['score']:>9.3f} "
                             f"{r['percent']:>6.1f}% "
                             f"{r['boost']:>6.1f} "
