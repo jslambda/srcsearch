@@ -180,14 +180,22 @@ srcsearch search -i .srcsearch -q index --json --explain | python3 scripts/summa
 `scripts/summarize.py` is intended for ranking diagnostics. It extracts each explained scoring clause and prints the query term, matched field, contributed score, percentage of the hit score, boost, unboosted base score, term frequency (`freq`), inverse document frequency (`idf`), document length (`dl`), average document length (`avgdl`), and matching document count (`n`). Rows are separated by `-----------------` between hits. A typical summary looks like:
 
 ```text
-term         field     score percent  boost      base   freq      idf      dl     avgdl       n
-index        signature     2.987   38.2%    2.0     1.493    1.0    1.881     9.0     5.506    12.0
-index          doc     2.637   33.7%    2.0     1.319    1.0    2.267     8.0     2.901     8.0
-index         code     2.197   28.1%    1.0     2.197    2.0    1.250    24.0   106.728    23.0
+src/lib.rs:331:1: index_project (score: 8.009)
+term         field          score percent  boost      base   freq      idf      dl     avgdl       n
+index        signature      3.015   37.6%    2.0     1.507    1.0    1.881     9.0     5.605    12.0
+index        doc            2.717   33.9%    2.0     1.358    1.0    2.267     8.0     3.037     8.0
+index        code           2.277   28.4%    1.0     2.277    2.0    1.293    24.0   108.667    22.0
 -----------------
-index        signature     3.259   43.7%    2.0     1.630    2.0    1.881    17.0     5.506    12.0
-index          doc     1.675   22.5%    2.0     0.838    1.0    2.267    15.0     2.901     8.0
-index         code     2.525   33.9%    1.0     2.525   30.0    1.250   280.0   106.728    23.0
+src/lib.rs:542:1: update_tantivy_index (score: 7.644)
+term         field          score percent  boost      base   freq      idf      dl     avgdl       n
+index        signature      3.291   43.1%    2.0     1.645    2.0    1.881    17.0     5.605    12.0
+index        doc            1.736   22.7%    2.0     0.868    1.0    2.267    15.0     3.037     8.0
+index        code           2.617   34.2%    1.0     2.617   30.0    1.293   280.0   108.667    22.0
+-----------------
+src/lib.rs:657:1: register_doc_text_analyzer (score: 7.196)
+term         field          score percent  boost      base   freq      idf      dl     avgdl       n
+index        signature      4.834   67.2%    2.0     2.417    2.0    1.881     7.0     5.605    12.0
+index        code           2.361   32.8%    1.0     2.361    3.0    1.293    38.0   108.667    22.0
 -----------------
 ```
 
