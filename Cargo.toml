@@ -1,6 +1,6 @@
 [package]
 name = "srcsearch"
-version = "0.1.1"
+version = "0.2"
 edition = "2024"
 description = "Index Rust source and Markdown docs, then search them with Tantivy"
 repository = "https://github.com/jslambda/srcsearch"
