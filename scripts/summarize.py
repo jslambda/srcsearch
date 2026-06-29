@@ -149,7 +149,6 @@ def format_search_result(record: dict[str, Any]) -> str:
     return f"{file_path}:{line_start}:1: {name} (score: {score:.3f})"
 
 def main() -> None:
-    print_header()
     text = sys.stdin.read().strip()
     hits = json.loads(text)
     exp_indicator = "Explanation("
@@ -157,6 +156,7 @@ def main() -> None:
         expl = hit.get('explanation')
         print(format_search_result(hit.get("hit") or dict()))
         if isinstance(expl,str):
+            print_header()
             start = expl.find(exp_indicator) + len(exp_indicator)
             for r in summarize_explanation(json.loads(expl[start:-1])):
                 print(
