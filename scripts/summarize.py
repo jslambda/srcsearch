@@ -139,6 +139,15 @@ def print_grouped_summary(rows: list[dict]) -> None:
     for field, score in sorted(by_field.items(), key=lambda x: x[1], reverse=True):
         print(f"  field {field:<4} {score:.3f}")
 
+
+def format_search_result(record: dict[str, Any]) -> str:
+    file_path = record.get("file_path", "")
+    line_start = record.get("line_start", 1)
+    name = record.get("name") or record.get("title") or "<unknown>"
+    score = float(record.get("score", 0.0))
+
+    return f"{file_path}:{line_start}:1: {name} (score: {score:.3f})"
+
 def main() -> None:
     print_header()
     text = sys.stdin.read().strip()
@@ -146,6 +155,7 @@ def main() -> None:
     exp_indicator = "Explanation("
     for hit in hits:
         expl = hit.get('explanation')
+        print(format_search_result(hit.get("hit") or dict()))
         if isinstance(expl,str):
             start = expl.find(exp_indicator) + len(exp_indicator)
             for r in summarize_explanation(json.loads(expl[start:-1])):
