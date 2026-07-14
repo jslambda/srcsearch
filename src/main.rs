@@ -100,7 +100,10 @@ enum Commands {
         scope: SearchScopeArg,
         #[arg(long)]
         json: bool,
-        #[arg(long, help = "Show Tantivy score explanations for the top three hits")]
+        #[arg(
+            long,
+            help = "Show structured match details and raw Tantivy score explanations for the top three hits"
+        )]
         explain: bool,
     },
 }
@@ -155,7 +158,7 @@ fn format_search_hits(hits: &[SearchHit]) -> String {
     output
 }
 
-/// Formats search hits and, when present, appends Tantivy score explanations.
+/// Formats search hits and, when present, appends structured match details plus raw explanations.
 fn format_search_hits_with_explanations(hits: &[SearchHitWithExplanation]) -> String {
     if hits.is_empty() {
         return "No results found.\n".to_string();
@@ -163,6 +166,15 @@ fn format_search_hits_with_explanations(hits: &[SearchHitWithExplanation]) -> St
     let base_hits: Vec<SearchHit> = hits.iter().map(|item| item.hit.clone()).collect();
     let mut output = format_search_hits(&base_hits);
     for item in hits {
+        if !item.matches.is_empty() {
+            output.push_str("--- matches ---\n");
+            for item_match in &item.matches {
+                output.push_str(&format!(
+                    "field={} type={} matched={}\n",
+                    item_match.field, item_match.query_type, item_match.matched
+                ));
+            }
+        }
         if let Some(explanation) = &item.explanation {
             output.push_str("--- explanation ---\n");
             output.push_str(explanation);
@@ -241,9 +253,11 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Commands, SearchScopeArg, format_search_hits};
+    use super::{
+        Cli, Commands, SearchScopeArg, format_search_hits, format_search_hits_with_explanations,
+    };
     use clap::{CommandFactory, Parser, error::ErrorKind};
-    use srcsearch::SearchHit;
+    use srcsearch::{SearchHit, SearchHitWithExplanation, SearchMatchExplanation};
     use std::path::PathBuf;
 
     #[test]
@@ -628,6 +642,36 @@ mod tests {
             output,
             "README.md:1:1: semantic search over code and docs\n"
         );
+    }
+
+    #[test]
+    fn formats_explained_search_results_with_structured_matches() {
+        let hits = vec![SearchHitWithExplanation {
+            hit: SearchHit {
+                score: 1.0,
+                record_type: "markdown".to_string(),
+                file_path: "README.md".to_string(),
+                title: Some("Quickstart".to_string()),
+                name: None,
+                kind: None,
+                signature: None,
+                line_start: Some(7),
+                line_end: Some(8),
+                heading_line: Some(7),
+            },
+            explanation: Some("raw tantivy explanation".to_string()),
+            matches: vec![SearchMatchExplanation {
+                field: "body_text".to_string(),
+                matched: "quick start".to_string(),
+                query_type: "phrase".to_string(),
+                raw_clause: None,
+            }],
+        }];
+
+        let output = format_search_hits_with_explanations(&hits);
+
+        assert!(output.contains("field=body_text type=phrase matched=quick start"));
+        assert!(output.contains("raw tantivy explanation"));
     }
 
     #[test]
