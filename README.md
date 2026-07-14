@@ -92,7 +92,9 @@ Explain top scores:
 cargo run -- search --index-dir index --query quickstart --json --explain
 ```
 
-`--explain` asks Tantivy for score explanations for the top three returned hits. The flag is most useful with `--json`, where each result includes the regular `hit` payload plus an `explanation` string. Hits after the top three have `null` explanations so large result sets stay compact. 
+`--explain` asks Tantivy for score explanations for the top three returned hits and also emits compact structured match details. Non-JSON output prints `field=<name> type=<term|phrase|boolean|other> matched=<text>` rows before the raw explanation. With `--json`, each result includes the regular `hit` payload, an `explanation` string for explained hits, and a `matches` array containing structured `field`, `matched`, `query_type`, and optional `raw_clause` values. Hits after the top three have `null` explanations and omit `matches` so large result sets stay compact.
+
+For phrase queries, `matches` reports the whole phrase when Tantivy exposes it. Field names are schema names such as `title`, `body_text`, `doc`, `name`, `signature`, and `code` rather than Tantivy numeric field IDs.
 
 Example JSON result payload:
 

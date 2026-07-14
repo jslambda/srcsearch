@@ -15,6 +15,7 @@ use markdown2json::{CodeBlock, Section, index_markdown};
 use regex::Regex;
 use rust2json::{IndexEntry, build_file_index};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
 use std::io;
@@ -56,6 +57,17 @@ pub struct SearchHit {
 pub struct SearchHitWithExplanation {
     pub hit: SearchHit,
     pub explanation: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub matches: Vec<SearchMatchExplanation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchMatchExplanation {
+    pub field: String,
+    pub matched: String,
+    pub query_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_clause: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -846,6 +858,8 @@ pub fn search_tantivy_index_with_explain(
             format!("failed to parse query '{query}': {err}"),
         )
     })?;
+    let query_debug = replace_explanation_field_indices(&format!("{parsed_query:#?}"), &schema)?;
+    let structured_matches = extract_search_match_explanations(&query_debug)?;
     let record_type = get_tantivy_doc_field(&schema, "record_type")?;
     let file_path = get_tantivy_doc_field(&schema, "file_path")?;
     let kind = get_tantivy_doc_field(&schema, "kind")?;
@@ -881,7 +895,8 @@ pub fn search_tantivy_index_with_explain(
                 .and_then(|value| value.as_str())
                 .map(ToOwned::to_owned)
         };
-        let explanation = if explain && idx < explain_count {
+        let should_explain = explain && idx < explain_count;
+        let explanation = if should_explain {
             let raw_explanation = parsed_query
                 .explain(&searcher, doc_address)
                 .map(|result| format!("{result:#?}"))
@@ -915,10 +930,139 @@ pub fn search_tantivy_index_with_explain(
                     .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
             },
             explanation,
+            matches: if should_explain {
+                structured_matches.clone()
+            } else {
+                Vec::new()
+            },
         });
     }
 
     Ok(hits_with_explanations)
+}
+
+/// Converts Tantivy query debug clauses into compact match details for explained hits.
+fn extract_search_match_explanations(query_debug: &str) -> AppResult<Vec<SearchMatchExplanation>> {
+    let term_regex = Regex::new(r#"Term\(field=([^,\)]+).*?"([^"]+)""#).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("failed to compile term explanation regex: {err}"),
+        )
+    })?;
+    let phrase_regex = Regex::new(r#"(?s)PhraseQuery.*?(?:phrase_terms|terms): \[(.*?)\]"#)
+        .map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("failed to compile phrase explanation regex: {err}"),
+            )
+        })?;
+
+    let mut matches = Vec::new();
+    let mut seen = HashSet::new();
+    let has_boolean_context = query_debug.contains("BooleanQuery")
+        || query_debug.contains("Occur::")
+        || query_debug.contains("Should")
+        || query_debug.contains("Must");
+    if has_boolean_context {
+        push_unique_match(
+            &mut matches,
+            &mut seen,
+            SearchMatchExplanation {
+                field: "query".to_string(),
+                matched: "compound".to_string(),
+                query_type: "boolean".to_string(),
+                raw_clause: Some(
+                    query_debug
+                        .lines()
+                        .next()
+                        .unwrap_or("BooleanQuery")
+                        .to_string(),
+                ),
+            },
+        );
+    }
+
+    for phrase in phrase_regex.captures_iter(query_debug) {
+        let Some(raw_clause) = phrase.get(1) else {
+            continue;
+        };
+        let terms: Vec<_> = term_regex
+            .captures_iter(raw_clause.as_str())
+            .filter_map(|captures| {
+                Some((
+                    captures.get(1)?.as_str().trim().to_string(),
+                    captures.get(2)?.as_str().to_string(),
+                ))
+            })
+            .collect();
+        if let Some((field, _)) = terms.first() {
+            let matched = terms
+                .iter()
+                .map(|(_, term)| term.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
+            push_unique_match(
+                &mut matches,
+                &mut seen,
+                SearchMatchExplanation {
+                    field: field.clone(),
+                    matched,
+                    query_type: "phrase".to_string(),
+                    raw_clause: Some(raw_clause.as_str().trim().to_string()),
+                },
+            );
+        }
+    }
+
+    for term in term_regex.captures_iter(query_debug) {
+        let Some(field) = term.get(1).map(|field| field.as_str().trim().to_string()) else {
+            continue;
+        };
+        let Some(matched) = term.get(2).map(|matched| matched.as_str().to_string()) else {
+            continue;
+        };
+        push_unique_match(
+            &mut matches,
+            &mut seen,
+            SearchMatchExplanation {
+                field,
+                matched,
+                query_type: "term".to_string(),
+                raw_clause: Some(term.get(0).map_or("", |raw| raw.as_str()).to_string()),
+            },
+        );
+    }
+
+    if matches.is_empty() && !query_debug.trim().is_empty() {
+        matches.push(SearchMatchExplanation {
+            field: "unknown".to_string(),
+            matched: query_debug
+                .lines()
+                .next()
+                .unwrap_or("unknown")
+                .trim()
+                .to_string(),
+            query_type: "other".to_string(),
+            raw_clause: Some(query_debug.to_string()),
+        });
+    }
+
+    Ok(matches)
+}
+
+fn push_unique_match(
+    matches: &mut Vec<SearchMatchExplanation>,
+    seen: &mut HashSet<(String, String, String)>,
+    item: SearchMatchExplanation,
+) {
+    let key = (
+        item.field.clone(),
+        item.matched.clone(),
+        item.query_type.clone(),
+    );
+    if seen.insert(key) {
+        matches.push(item);
+    }
 }
 
 /// Rewrites Tantivy explanation field identifiers to schema field names for readability.
@@ -1472,6 +1616,111 @@ mod tests {
         assert!(hits[1].explanation.is_some());
         assert!(hits[2].explanation.is_some());
         assert!(hits[3].explanation.is_none());
+
+        let _ = fs::remove_dir_all(&output_dir);
+    }
+
+    #[test]
+    fn explained_term_query_includes_structured_match_details() {
+        let output_dir = temp_path("explain-term-matches");
+        let records = vec![SearchRecord::MarkdownSection {
+            file_path: "README.md".to_string(),
+            section: Section {
+                title: "Quickstart".to_string(),
+                level: 1,
+                body_text: vec!["Install the quickstart guide".to_string()],
+                code_blocks: vec![],
+                start_line: None,
+                end_line: None,
+                heading_line: None,
+            },
+        }];
+        write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
+
+        let hits = search_tantivy_index_with_explain(
+            &output_dir,
+            "quickstart",
+            10,
+            SearchScope::All,
+            true,
+        )
+        .expect("search should succeed");
+
+        assert!(hits[0].explanation.is_some());
+        assert!(hits[0].matches.iter().any(|item| {
+            item.field == "title" && item.matched == "quickstart" && item.query_type == "term"
+        }));
+
+        let _ = fs::remove_dir_all(&output_dir);
+    }
+
+    #[test]
+    fn explained_phrase_query_includes_whole_phrase_match_details() {
+        let output_dir = temp_path("explain-phrase-matches");
+        let records = vec![SearchRecord::MarkdownSection {
+            file_path: "README.md".to_string(),
+            section: Section {
+                title: "Guide".to_string(),
+                level: 1,
+                body_text: vec!["Read the quick start notes".to_string()],
+                code_blocks: vec![],
+                start_line: None,
+                end_line: None,
+                heading_line: None,
+            },
+        }];
+        write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
+
+        let hits = search_tantivy_index_with_explain(
+            &output_dir,
+            "\"quick start\"",
+            10,
+            SearchScope::All,
+            true,
+        )
+        .expect("search should succeed");
+
+        assert!(hits[0].matches.iter().any(|item| {
+            item.field == "body_text"
+                && item.matched == "quick start"
+                && item.query_type == "phrase"
+        }));
+
+        let _ = fs::remove_dir_all(&output_dir);
+    }
+
+    #[test]
+    fn explained_boolean_query_identifies_compound_context() {
+        let output_dir = temp_path("explain-boolean-matches");
+        let records = vec![SearchRecord::MarkdownSection {
+            file_path: "README.md".to_string(),
+            section: Section {
+                title: "Quickstart guide".to_string(),
+                level: 1,
+                body_text: vec!["Install and search".to_string()],
+                code_blocks: vec![],
+                start_line: None,
+                end_line: None,
+                heading_line: None,
+            },
+        }];
+        write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
+
+        let hits = search_tantivy_index_with_explain(
+            &output_dir,
+            "quickstart OR guide",
+            10,
+            SearchScope::All,
+            true,
+        )
+        .expect("search should succeed");
+
+        assert!(
+            hits[0]
+                .matches
+                .iter()
+                .any(|item| item.query_type == "boolean" && item.matched == "compound")
+        );
 
         let _ = fs::remove_dir_all(&output_dir);
     }
