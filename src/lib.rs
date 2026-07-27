@@ -56,6 +56,7 @@ pub struct SearchHit {
 pub struct SearchHitWithExplanation {
     pub hit: SearchHit,
     pub explanation: Option<String>,
+    pub explanation_short: Vec<MatchedTerm>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -866,7 +867,7 @@ pub fn search_tantivy_index_with_explain(
                 format!("failed to execute tantivy query '{query}': {err}"),
             )
         })?;
-    let explain_count = top_docs.len().min(3);
+    let explain_count = top_docs.len().min(4);
     let mut hits_with_explanations = Vec::with_capacity(top_docs.len());
     for (idx, (score, doc_address)) in top_docs.into_iter().enumerate() {
         let retrieved: TantivyDocument = searcher.doc(doc_address).map_err(|err| {
@@ -881,7 +882,7 @@ pub fn search_tantivy_index_with_explain(
                 .and_then(|value| value.as_str())
                 .map(ToOwned::to_owned)
         };
-        let explanation = if explain && idx < explain_count {
+        let (expl, explanation) = if idx < explain_count {
             let raw_explanation = parsed_query
                 .explain(&searcher, doc_address)
                 .map(|result| format!("{result:#?}"))
@@ -891,12 +892,16 @@ pub fn search_tantivy_index_with_explain(
                         format!("failed to explain tantivy hit: {err}"),
                     )
                 })?;
-            Some(replace_explanation_field_indices(
-                &raw_explanation,
-                &schema,
-            )?)
+            (
+                extract_matching_terms(&raw_explanation, &schema),
+                if explain {
+                    replace_explanation_field_indices(&raw_explanation, &schema)
+                } else {
+                    None
+                },
+            )
         } else {
-            None
+            (Vec::new(), None)
         };
         hits_with_explanations.push(SearchHitWithExplanation {
             hit: SearchHit {
@@ -915,6 +920,7 @@ pub fn search_tantivy_index_with_explain(
                     .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
             },
             explanation,
+            explanation_short: expl,
         });
     }
 
@@ -922,30 +928,52 @@ pub fn search_tantivy_index_with_explain(
 }
 
 /// Rewrites Tantivy explanation field identifiers to schema field names for readability.
-fn replace_explanation_field_indices(explanation: &str, schema: &Schema) -> AppResult<String> {
-    let field_regex = Regex::new(r"field=(\d+)").map_err(|err| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("failed to compile field replacement regex: {err}"),
-        )
-    })?;
+fn replace_explanation_field_indices(explanation: &str, schema: &Schema) -> Option<String> {
+    let field_regex = Regex::new(r"field=(\d+)").expect("msg");
 
-    Ok(field_regex
-        .replace_all(explanation, |captures: &regex::Captures<'_>| {
-            let Some(field_match) = captures.get(1) else {
-                return captures[0].to_string();
-            };
-            let Ok(field_id) = field_match.as_str().parse::<u32>() else {
-                return captures[0].to_string();
-            };
+    Some(
+        field_regex
+            .replace_all(explanation, |captures: &regex::Captures<'_>| {
+                let Some(field_match) = captures.get(1) else {
+                    return captures[0].to_string();
+                };
+                let Ok(field_id) = field_match.as_str().parse::<u32>() else {
+                    return captures[0].to_string();
+                };
+                let field = Field::from_field_id(field_id);
+                if (field_id as usize) < schema.num_fields() {
+                    format!("field={}", schema.get_field_name(field))
+                } else {
+                    captures[0].to_string()
+                }
+            })
+            .into_owned(),
+    )
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchedTerm {
+    term: String,
+    field: String,
+}
+
+fn extract_matching_terms(explanation: &str, schema: &Schema) -> Vec<MatchedTerm> {
+    let term_regex = Regex::new(r"Term\s*\(\s*field=(\d+)\s*,.+,([^)]+)\)")
+        .expect("The TermQuery regex should be valid.");
+    let matches = term_regex
+        .captures_iter(explanation)
+        .filter_map(|captures| {
+            let field_id = captures.get(1)?.as_str().parse::<u32>().ok()?;
+            let term = captures.get(2)?.as_str().trim();
+
             let field = Field::from_field_id(field_id);
-            if (field_id as usize) < schema.num_fields() {
-                format!("field={}", schema.get_field_name(field))
-            } else {
-                captures[0].to_string()
-            }
+            Some(MatchedTerm {
+                field: schema.get_field_name(field).to_string(),
+                term: term.to_string(),
+            })
         })
-        .into_owned())
+        .collect();
+    matches
 }
 
 // TODO: we call this function for every Rust symbol. Better to go through the files, and
@@ -1404,7 +1432,7 @@ mod tests {
     }
 
     #[test]
-    fn search_tantivy_index_with_explain_limits_explanations_to_top_three() {
+    fn search_tantivy_index_with_explain_limits_explanations_to_top_four() {
         let output_dir = temp_path("search-index-with-explain");
         let records = vec![
             SearchRecord::MarkdownSection {
@@ -1455,6 +1483,18 @@ mod tests {
                     heading_line: None,
                 },
             },
+            SearchRecord::MarkdownSection {
+                file_path: "five.md".to_string(),
+                section: Section {
+                    title: "Five".to_string(),
+                    level: 1,
+                    body_text: vec!["quickstart".to_string()],
+                    code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
+                },
+            },
         ];
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
 
@@ -1467,11 +1507,12 @@ mod tests {
         )
         .expect("search should succeed");
 
-        assert_eq!(hits.len(), 4);
+        assert_eq!(hits.len(), 5);
         assert!(hits[0].explanation.is_some());
         assert!(hits[1].explanation.is_some());
         assert!(hits[2].explanation.is_some());
-        assert!(hits[3].explanation.is_none());
+        assert!(hits[3].explanation.is_some());
+        assert!(hits[4].explanation.is_none());
 
         let _ = fs::remove_dir_all(&output_dir);
     }
