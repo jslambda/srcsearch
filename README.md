@@ -92,59 +92,40 @@ Explain top scores:
 cargo run -- search --index-dir index --query quickstart --json --explain
 ```
 
-`--explain` asks Tantivy for score explanations for the top three returned hits. The flag is most useful with `--json`, where each result includes the regular `hit` payload plus an `explanation` string. Hits after the top three have `null` explanations so large result sets stay compact. 
+Search results include an `explanation_short` list for each of the top four hits. Each
+entry identifies a query `term` and the indexed `field` in which it matched. This compact
+explanation is included even without `--explain`. Hits after the top four have an empty
+list.
+
+`--explain` additionally asks Tantivy for its complete score explanation for those top
+four hits. The flag is most useful with `--json`, where each result contains a `hit`
+payload, the detailed `explanation` string (or `null` after the fourth hit), and
+`explanation_short`.
 
 Example JSON result payload:
 
 ```json
 [
   {
-    "score": 4.23791,
-    "record_type": "markdown",
-    "file_path": "docs/guide.md",
-    "title": "Quickstart",
-    "name": null,
-    "kind": null,
-    "signature": null,
-    "line_start": 1,
-    "line_end": 18,
-    "heading_line": 1
-  },
-  {
-    "score": 3.91244,
-    "record_type": "rust",
-    "file_path": "src/lib.rs",
-    "title": null,
-    "name": "add_one",
-    "kind": "fn",
-    "signature": "pub fn add_one(value: i32) -> i32",
-    "line_start": 3,
-    "line_end": 5,
-    "heading_line": null
-  },
-  {
-    "score": 3.10582,
-    "record_type": "rust",
-    "file_path": "src/lib.rs",
-    "title": null,
-    "name": "Widget",
-    "kind": "struct",
-    "signature": "pub struct Widget",
-    "line_start": 8,
-    "line_end": 12,
-    "heading_line": null
-  },
-  {
-    "score": 2.84467,
-    "record_type": "rust",
-    "file_path": "src/lib.rs",
-    "title": null,
-    "name": "Widget::new",
-    "kind": "impl",
-    "signature": "pub fn new() -> Self",
-    "line_start": 14,
-    "line_end": 16,
-    "heading_line": null
+    "hit": {
+      "score": 4.23791,
+      "record_type": "markdown",
+      "file_path": "docs/guide.md",
+      "title": "Quickstart",
+      "name": null,
+      "kind": null,
+      "signature": null,
+      "line_start": 1,
+      "line_end": 18,
+      "heading_line": 1
+    },
+    "explanation": "Explanation({ ... })",
+    "explanation_short": [
+      {
+        "term": "quickstart",
+        "field": "title"
+      }
+    ]
   }
 ]
 ```

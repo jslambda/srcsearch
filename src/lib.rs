@@ -951,12 +951,14 @@ fn replace_explanation_field_indices(explanation: &str, schema: &Schema) -> Opti
     )
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A query term and schema field that contributed to a search hit's score.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchedTerm {
-    term: String,
-    field: String,
+    pub term: String,
+    pub field: String,
 }
 
+/// Extracts the matched terms from Tantivy's debug-formatted explanation context.
 fn extract_matching_terms(explanation: &str, schema: &Schema) -> Vec<MatchedTerm> {
     let term_regex = Regex::new(r"Term\s*\(\s*field=(\d+)\s*,.+,([^)]+)\)")
         .expect("The TermQuery regex should be valid.");
@@ -964,7 +966,10 @@ fn extract_matching_terms(explanation: &str, schema: &Schema) -> Vec<MatchedTerm
         .captures_iter(explanation)
         .filter_map(|captures| {
             let field_id = captures.get(1)?.as_str().parse::<u32>().ok()?;
-            let term = captures.get(2)?.as_str().trim();
+            if field_id as usize >= schema.num_fields() {
+                return None;
+            }
+            let term = captures.get(2)?.as_str().trim().trim_matches(['\\', '"']);
 
             let field = Field::from_field_id(field_id);
             Some(MatchedTerm {
@@ -1005,9 +1010,9 @@ fn extract_code_snippet(project_root: &Path, entry: &IndexEntry) -> AppResult<Op
 #[cfg(test)]
 mod tests {
     use super::{
-        SearchRecord, SearchScope, extract_code_snippet, get_tantivy_doc_field,
-        replace_explanation_field_indices, search_tantivy_index, search_tantivy_index_with_explain,
-        update_tantivy_index, write_tantivy_index,
+        MatchedTerm, SearchRecord, SearchScope, extract_code_snippet, extract_matching_terms,
+        get_tantivy_doc_field, replace_explanation_field_indices, search_tantivy_index,
+        search_tantivy_index_with_explain, update_tantivy_index, write_tantivy_index,
     };
     use markdown2json::{CodeBlock, Section};
     use rust2json::IndexEntry;
@@ -1513,6 +1518,14 @@ mod tests {
         assert!(hits[2].explanation.is_some());
         assert!(hits[3].explanation.is_some());
         assert!(hits[4].explanation.is_none());
+        assert_eq!(
+            hits[0].explanation_short,
+            vec![MatchedTerm {
+                term: "quickstart".to_string(),
+                field: "body_text".to_string(),
+            }]
+        );
+        assert!(hits[4].explanation_short.is_empty());
 
         let _ = fs::remove_dir_all(&output_dir);
     }
@@ -1531,6 +1544,46 @@ mod tests {
         assert!(replaced.contains("field=title"));
         assert!(replaced.contains("field=42"));
         assert!(!replaced.contains("field=0"));
+    }
+
+    #[test]
+    fn extract_matching_terms_returns_terms_with_schema_field_names() {
+        let mut schema_builder = Schema::builder();
+        schema_builder.add_text_field("title", TEXT | STORED);
+        schema_builder.add_text_field("body_text", TEXT | STORED);
+        let schema = schema_builder.build();
+        let explanation = r#"
+            "Term=Term(field=0, type=Str, \"quickstart\")"
+            "Term=Term(field=1, type=Str, \"guide\")"
+        "#;
+
+        assert_eq!(
+            extract_matching_terms(explanation, &schema),
+            vec![
+                MatchedTerm {
+                    term: "quickstart".to_string(),
+                    field: "title".to_string(),
+                },
+                MatchedTerm {
+                    term: "guide".to_string(),
+                    field: "body_text".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn extract_matching_terms_ignores_malformed_and_unknown_fields() {
+        let mut schema_builder = Schema::builder();
+        schema_builder.add_text_field("title", TEXT | STORED);
+        let schema = schema_builder.build();
+        let explanation = concat!(
+            "Term(field=invalid, type=Str, \\\"bad-id\\\")\n",
+            "Term(field=8, type=Str, \\\"unknown-field\\\")\n",
+            "Term(field=0, type=Str)"
+        );
+
+        assert!(extract_matching_terms(explanation, &schema).is_empty());
     }
 
     #[test]
