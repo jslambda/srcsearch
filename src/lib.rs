@@ -56,6 +56,7 @@ pub struct SearchHit {
 pub struct SearchHitWithExplanation {
     pub hit: SearchHit,
     pub explanation: Option<String>,
+    pub explanation_short: Vec<MatchedTerm>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -866,7 +867,7 @@ pub fn search_tantivy_index_with_explain(
                 format!("failed to execute tantivy query '{query}': {err}"),
             )
         })?;
-    let explain_count = top_docs.len().min(3);
+    let explain_count = top_docs.len().min(4);
     let mut hits_with_explanations = Vec::with_capacity(top_docs.len());
     for (idx, (score, doc_address)) in top_docs.into_iter().enumerate() {
         let retrieved: TantivyDocument = searcher.doc(doc_address).map_err(|err| {
@@ -881,7 +882,7 @@ pub fn search_tantivy_index_with_explain(
                 .and_then(|value| value.as_str())
                 .map(ToOwned::to_owned)
         };
-        let explanation = if explain && idx < explain_count {
+        let (expl, explanation) = if idx < explain_count {
             let raw_explanation = parsed_query
                 .explain(&searcher, doc_address)
                 .map(|result| format!("{result:#?}"))
@@ -891,12 +892,16 @@ pub fn search_tantivy_index_with_explain(
                         format!("failed to explain tantivy hit: {err}"),
                     )
                 })?;
-            Some(replace_explanation_field_indices(
-                &raw_explanation,
-                &schema,
-            )?)
+            (
+                extract_matching_terms(&raw_explanation, &schema),
+                if explain {
+                    replace_explanation_field_indices(&raw_explanation, &schema)
+                } else {
+                    None
+                },
+            )
         } else {
-            None
+            (Vec::new(), None)
         };
         hits_with_explanations.push(SearchHitWithExplanation {
             hit: SearchHit {
@@ -915,6 +920,7 @@ pub fn search_tantivy_index_with_explain(
                     .and_then(|field| retrieved.get_first(field).and_then(|value| value.as_u64())),
             },
             explanation,
+            explanation_short: expl,
         });
     }
 
@@ -922,30 +928,57 @@ pub fn search_tantivy_index_with_explain(
 }
 
 /// Rewrites Tantivy explanation field identifiers to schema field names for readability.
-fn replace_explanation_field_indices(explanation: &str, schema: &Schema) -> AppResult<String> {
-    let field_regex = Regex::new(r"field=(\d+)").map_err(|err| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("failed to compile field replacement regex: {err}"),
-        )
-    })?;
+fn replace_explanation_field_indices(explanation: &str, schema: &Schema) -> Option<String> {
+    let field_regex = Regex::new(r"field=(\d+)").expect("msg");
 
-    Ok(field_regex
-        .replace_all(explanation, |captures: &regex::Captures<'_>| {
-            let Some(field_match) = captures.get(1) else {
-                return captures[0].to_string();
-            };
-            let Ok(field_id) = field_match.as_str().parse::<u32>() else {
-                return captures[0].to_string();
-            };
-            let field = Field::from_field_id(field_id);
-            if (field_id as usize) < schema.num_fields() {
-                format!("field={}", schema.get_field_name(field))
-            } else {
-                captures[0].to_string()
+    Some(
+        field_regex
+            .replace_all(explanation, |captures: &regex::Captures<'_>| {
+                let Some(field_match) = captures.get(1) else {
+                    return captures[0].to_string();
+                };
+                let Ok(field_id) = field_match.as_str().parse::<u32>() else {
+                    return captures[0].to_string();
+                };
+                let field = Field::from_field_id(field_id);
+                if (field_id as usize) < schema.num_fields() {
+                    format!("field={}", schema.get_field_name(field))
+                } else {
+                    captures[0].to_string()
+                }
+            })
+            .into_owned(),
+    )
+}
+
+/// A query term and schema field that contributed to a search hit's score.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MatchedTerm {
+    pub term: String,
+    pub field: String,
+}
+
+/// Extracts the matched terms from Tantivy's debug-formatted explanation context.
+fn extract_matching_terms(explanation: &str, schema: &Schema) -> Vec<MatchedTerm> {
+    let term_regex = Regex::new(r"Term\s*\(\s*field=(\d+)\s*,.+,([^)]+)\)")
+        .expect("The TermQuery regex should be valid.");
+    let matches = term_regex
+        .captures_iter(explanation)
+        .filter_map(|captures| {
+            let field_id = captures.get(1)?.as_str().parse::<u32>().ok()?;
+            if field_id as usize >= schema.num_fields() {
+                return None;
             }
+            let term = captures.get(2)?.as_str().trim().trim_matches(['\\', '"']);
+
+            let field = Field::from_field_id(field_id);
+            Some(MatchedTerm {
+                field: schema.get_field_name(field).to_string(),
+                term: term.to_string(),
+            })
         })
-        .into_owned())
+        .collect();
+    matches
 }
 
 // TODO: we call this function for every Rust symbol. Better to go through the files, and
@@ -977,9 +1010,9 @@ fn extract_code_snippet(project_root: &Path, entry: &IndexEntry) -> AppResult<Op
 #[cfg(test)]
 mod tests {
     use super::{
-        SearchRecord, SearchScope, extract_code_snippet, get_tantivy_doc_field,
-        replace_explanation_field_indices, search_tantivy_index, search_tantivy_index_with_explain,
-        update_tantivy_index, write_tantivy_index,
+        MatchedTerm, SearchRecord, SearchScope, extract_code_snippet, extract_matching_terms,
+        get_tantivy_doc_field, replace_explanation_field_indices, search_tantivy_index,
+        search_tantivy_index_with_explain, update_tantivy_index, write_tantivy_index,
     };
     use markdown2json::{CodeBlock, Section};
     use rust2json::IndexEntry;
@@ -1404,7 +1437,7 @@ mod tests {
     }
 
     #[test]
-    fn search_tantivy_index_with_explain_limits_explanations_to_top_three() {
+    fn search_tantivy_index_with_explain_limits_explanations_to_top_four() {
         let output_dir = temp_path("search-index-with-explain");
         let records = vec![
             SearchRecord::MarkdownSection {
@@ -1455,6 +1488,18 @@ mod tests {
                     heading_line: None,
                 },
             },
+            SearchRecord::MarkdownSection {
+                file_path: "five.md".to_string(),
+                section: Section {
+                    title: "Five".to_string(),
+                    level: 1,
+                    body_text: vec!["quickstart".to_string()],
+                    code_blocks: vec![],
+                    start_line: None,
+                    end_line: None,
+                    heading_line: None,
+                },
+            },
         ];
         write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
 
@@ -1467,11 +1512,20 @@ mod tests {
         )
         .expect("search should succeed");
 
-        assert_eq!(hits.len(), 4);
+        assert_eq!(hits.len(), 5);
         assert!(hits[0].explanation.is_some());
         assert!(hits[1].explanation.is_some());
         assert!(hits[2].explanation.is_some());
-        assert!(hits[3].explanation.is_none());
+        assert!(hits[3].explanation.is_some());
+        assert!(hits[4].explanation.is_none());
+        assert_eq!(
+            hits[0].explanation_short,
+            vec![MatchedTerm {
+                term: "quickstart".to_string(),
+                field: "body_text".to_string(),
+            }]
+        );
+        assert!(hits[4].explanation_short.is_empty());
 
         let _ = fs::remove_dir_all(&output_dir);
     }
@@ -1490,6 +1544,46 @@ mod tests {
         assert!(replaced.contains("field=title"));
         assert!(replaced.contains("field=42"));
         assert!(!replaced.contains("field=0"));
+    }
+
+    #[test]
+    fn extract_matching_terms_returns_terms_with_schema_field_names() {
+        let mut schema_builder = Schema::builder();
+        schema_builder.add_text_field("title", TEXT | STORED);
+        schema_builder.add_text_field("body_text", TEXT | STORED);
+        let schema = schema_builder.build();
+        let explanation = r#"
+            "Term=Term(field=0, type=Str, \"quickstart\")"
+            "Term=Term(field=1, type=Str, \"guide\")"
+        "#;
+
+        assert_eq!(
+            extract_matching_terms(explanation, &schema),
+            vec![
+                MatchedTerm {
+                    term: "quickstart".to_string(),
+                    field: "title".to_string(),
+                },
+                MatchedTerm {
+                    term: "guide".to_string(),
+                    field: "body_text".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn extract_matching_terms_ignores_malformed_and_unknown_fields() {
+        let mut schema_builder = Schema::builder();
+        schema_builder.add_text_field("title", TEXT | STORED);
+        let schema = schema_builder.build();
+        let explanation = concat!(
+            "Term(field=invalid, type=Str, \\\"bad-id\\\")\n",
+            "Term(field=8, type=Str, \\\"unknown-field\\\")\n",
+            "Term(field=0, type=Str)"
+        );
+
+        assert!(extract_matching_terms(explanation, &schema).is_empty());
     }
 
     #[test]
