@@ -5,3 +5,4 @@
  - Update the existing comments as you change the code
  - Update README.md when either public API or command line interface is changed.
  - Do not add tests when updating documentation.
+ - Do not run tests when updating documentation or comments.
