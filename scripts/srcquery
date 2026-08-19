@@ -6,7 +6,6 @@ explain_flag=""
 
 if [ "$#" -eq 2 ] && [ "$2" = "--json" ]; then
   json_flag="--json"
-  explain_flag="--explain"
 elif [ "$#" -eq 2 ] && [ "$2" = "--explain" ]; then
   explain_flag="--explain"
 fi
