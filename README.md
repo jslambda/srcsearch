@@ -12,10 +12,10 @@ It can be used in two ways:
 ## Why use srcsearch alongside ripgrep/grep?
 
 [`ripgrep`](https://github.com/BurntSushi/ripgrep) is a line-oriented search tool:
-it finds lines matching a regular expression. That is exactly what you
-want when you know the text or pattern to look for. `srcsearch` addresses a
-different problem: finding relevant code and documentation entities when you know
-the concepts, but not their exact wording or location.
+it finds lines matching a regular expression. That is the appropriate tool when
+you know the text or pattern to look for and want exhaustive matches. `srcsearch`
+addresses a different retrieval task: ranking likely code and documentation
+entities when the query terms may occur in different parts of an entity.
 
 `srcsearch` parses and indexes Rust entities and Markdown sections. A Rust result
 can rank because a query matches information distributed across its name,
@@ -30,57 +30,94 @@ is implemented. After indexing the repository, run:
 ```bash
 srcsearch search \
   --index-dir .srcsearch \
-  --query "multiline AND search"
+  --query 'multiline AND search'
 ```
 
-Relevant results can include entities such as:
+The top results include entities such as:
 
 ```text
 crates/core/flags/defs.rs:4503:1: Flag for Multiline
 crates/searcher/src/searcher/glue.rs:149:1: MultiLine < 's , M , S >
 README.md:211:1: Feature comparison
 crates/searcher/src/searcher/mod.rs:627:1: Searcher
+crates/core/flags/defs.rs:4591:1: Flag for MultilineDotall
 ```
 
-The first result demonstrates structure-aware retrieval. Its signature can supply
-`multiline` while its documentation or code supplies `search`; the source does not
-need to contain a single line matching:
+The first hit is one indexed `Multiline` flag entity. Its declaration supplies
+`multiline`, while methods and documentation within the entity supply `search`.
+This is structure-aware retrieval: the searchable unit is the complete entity,
+not an individual source line.
+
+A comparable line-oriented search is still useful:
 
 ```bash
 rg -n -i 'multiline.*search'
 ```
 
-This is more than fuzzy line matching: the searchable unit is the complete indexed
-Rust entity.
+It finds 13 matching lines in 6 files in this version of ripgrep, including prose
+such as `multiline search` and `multiline searches`. What it does not do is group
+those lines into Rust entities or rank the entities. Use `srcsearch` to discover
+the likely implementation units, then `rg` to inspect every textual occurrence.
 
 ### Search for a concept without knowing its wording
 
 If you want documentation about searching for files, an exact search is narrow:
 
 ```bash
-rg -n -i 'search for file' #
+rg -n -i 'search for file'
 ```
 
-Broadening it to `rg -n -i 'search.*file'` may return every matching line, as
-requested, but leaves you to inspect and prioritize them. A documentation-scoped
-`srcsearch` query instead ranks Markdown sections and Rust documentation while
-excluding Rust signatures and code:
+It finds no lines in this version of ripgrep. Broadening the expression improves
+recall, but produces 183 matching lines in 22 files for you to inspect and
+prioritize:
+
+```bash
+rg -n -i 'search.*file'
+```
+
+A documentation-scoped `srcsearch` query instead ranks Markdown sections and Rust
+documentation while excluding Rust signatures and code:
 
 ```bash
 srcsearch search \
   --index-dir .srcsearch \
   --scope doc \
-  --query "search for file"
+  --query 'search for file'
 ```
 
-For the ripgrep repository, relevant results include conceptual sections such as
-`Recursive search` and `Manual filtering: file types`, even when the query is not an
-exact phrase in those sections. The documentation fields also use English stemming,
-so `run` can match inflected forms such as `running`.
+Its top results include:
 
-Similarly, a query for `regex matcher` can rank important repository entities near
-the top—the matcher tests, matcher implementations, and the `grep-regex` crate
-documentation—instead of returning every line containing either term.
+```text
+GUIDE.md:117:1: Recursive search
+crates/core/main.rs:109:1: search
+GUIDE.md:627:1: File encoding
+GUIDE.md:324:1: Manual filtering: file types
+GUIDE.md:949:1: Reducing preprocessor overhead
+```
+
+The query finds conceptual sections such as `Recursive search` and `Manual
+filtering: file types` even though the exact phrase does not occur. It matched 318
+documentation entities in total; the CLI shows the 10 highest-ranked results by
+default. Ranking matters here because the goal is to find a useful starting point,
+not to print hundreds of unranked occurrences.
+
+Relevance remains query- and corpus-dependent. For example, `File encoding` ranks
+above `Manual filtering: file types`, so BM25 order is not a ground-truth judgment.
+Documentation fields also use English stemming, allowing `run` to match inflected
+forms such as `running`.
+
+Similarly, a query for `regex matcher` returns 270 entities and ranks the matcher
+tests, matcher implementations, and the `grep-regex` crate documentation near the
+top. An exhaustive `rg -n -i 'regex|matcher'` search returns 2,027 matching lines
+in 88 files. These queries are not semantically identical; the comparison shows
+the difference between ranked entity retrieval and exhaustive line retrieval, not
+that one tool has universally better recall.
+
+The figures above were reproduced on 2026-08-22 with `srcsearch 0.2.0` and
+`ripgrep 15.2.0`, using ripgrep repository commit
+`3fce3b5bb0236da2df6d99672afb8a719642eca7`. Full entity counts were obtained
+with `--limit 100000`, which exceeded the number of matches for each query. The
+reproducibility script is `.project/reproduce-ripgrep-experiments.sh`.
 
 ### Know the limitation: ranked lexical search is not semantic understanding
 
