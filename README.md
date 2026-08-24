@@ -288,7 +288,7 @@ stored as distinct fields.
 ### Example1: Find information distributed across a Rust entity
 
 Suppose you are exploring the ripgrep repository and ask where multiline searching
-is implemented. After indexing the repository (you can run `scripts/srcreindex` inside ripgrep folder), run the following inside ripgrep folder:
+is implemented. After indexing the repository (you can run `srcsearch index -p . -o .srcsearch` inside ripgrep folder), run the following inside ripgrep folder:
 
 ```bash
 srcsearch search \
