@@ -9,6 +9,7 @@ It can be used in two ways:
 
 ---
 
+
 ## CLI usage
 
 The crate provides a binary named `srcsearch` with these subcommands:
@@ -268,6 +269,155 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+---
+
+## Why use srcsearch alongside ripgrep/grep?
+
+[`ripgrep`](https://github.com/BurntSushi/ripgrep) is a line-oriented search tool:
+it finds lines matching a regular expression. That is the appropriate tool when
+you know the text or pattern to look for and want exhaustive matches. `srcsearch`
+addresses a different retrieval task: ranking likely code and documentation
+entities when the query terms may occur in different parts of an entity.
+
+`srcsearch` parses and indexes Rust entities and Markdown sections. A Rust result
+can rank because a query matches information distributed across its name,
+signature, documentation, and code. Markdown titles and section bodies are also
+stored as distinct fields.
+
+### Example1: Find information distributed across a Rust entity
+
+Suppose you are exploring the ripgrep repository and ask where multiline searching
+is implemented. After indexing the repository (you can run `scripts/srcreindex` inside ripgrep folder), run the following inside ripgrep folder:
+
+```bash
+srcsearch search \
+  --index-dir .srcsearch \
+  --query 'multiline AND search'
+```
+
+The top results include entities such as:
+
+```text
+crates/core/flags/defs.rs:4503:1: Flag for Multiline
+crates/searcher/src/searcher/glue.rs:149:1: MultiLine < 's , M , S >
+README.md:211:1: Feature comparison
+crates/searcher/src/searcher/mod.rs:627:1: Searcher
+crates/core/flags/defs.rs:4591:1: Flag for MultilineDotall
+```
+
+The first hit is one indexed `Multiline` flag entity. Its declaration supplies
+`multiline`, while methods and documentation within the entity supply `search`.
+This is structure-aware retrieval: the searchable unit is the complete entity,
+not an individual source line.
+
+A comparable line-oriented search is still useful:
+
+```bash
+rg -n -i 'multiline.*search'
+```
+
+It finds 13 matching lines in 6 files in this version of ripgrep, including prose
+such as `multiline search` and `multiline searches`. What it does not do is group
+those lines into Rust entities or rank the entities. Use `srcsearch` to discover
+the likely implementation units, then `rg` to inspect every textual occurrence.
+
+### Example2: Search for a concept without knowing its wording
+
+If you want documentation about searching for files, an exact search is narrow:
+
+```bash
+rg -n -i 'search for file'
+```
+
+It finds no lines in this version of ripgrep. Broadening the expression improves
+recall, but produces 183 matching lines in 22 files for you to inspect and
+prioritize:
+
+```bash
+rg -n -i 'search.*file'
+```
+
+A documentation-scoped `srcsearch` query instead ranks Markdown sections and Rust
+documentation while excluding Rust signatures and code:
+
+```bash
+srcsearch search \
+  --index-dir .srcsearch \
+  --scope doc \
+  --query 'search for file'
+```
+
+Its top results include:
+
+```text
+GUIDE.md:117:1: Recursive search
+crates/core/main.rs:109:1: search
+GUIDE.md:627:1: File encoding
+GUIDE.md:324:1: Manual filtering: file types
+GUIDE.md:949:1: Reducing preprocessor overhead
+```
+
+The query finds conceptual sections such as `Recursive search` and `Manual
+filtering: file types` even though the exact phrase does not occur. If you add `--limit 1000` 
+to the searchc command, you can see that it matches 318
+documentation entities in total; the CLI shows the 10 highest-ranked results by
+default. Ranking matters here because the goal is to find a useful starting point,
+not to print hundreds of unranked occurrences.
+
+<!--Relevance remains query- and corpus-dependent. For example, `File encoding` ranks
+above `Manual filtering: file types`, so BM25 order is not a ground-truth judgment.
+Documentation fields also use English stemming, allowing `run` to match inflected
+forms such as `running`.-->
+
+<!--A srcsearch query for `regex matcher` ranks the matcher
+tests, matcher implementations, and the `grep-regex` crate documentation near the
+top. An exhaustive `rg -n -i 'regex|matcher'` search returns 2,027 matching lines
+in 88 files. These queries are not semantically identical; the comparison shows
+the difference between ranked entity retrieval and exhaustive line retrieval, not
+that one tool has universally better recall.-->
+
+The figures above were reproduced with `srcsearch 0.2.0` and
+`ripgrep 15.2.0`, using ripgrep repository commit
+`3fce3b5bb0236da2df6d99672afb8a719642eca7`. Full entity counts were obtained
+with `--limit 100000`, which exceeded the number of matches for each query.
+
+### Know the limitation: ranked lexical search is not semantic understanding
+
+Natural-language-like input does not make `srcsearch` a semantic or vector search
+engine. It remains lexical, BM25-style search. A broad query such as `how regex
+matching is performed` can rank individually related terms—for example, discussions
+of globs compiled to regular expressions—without answering the intended question.
+More specific concept terms usually produce better results.
+
+<!--Use score explanations to understand a surprising result:
+
+```bash
+srcsearch search \
+  --index-dir .srcsearch \
+  --query "regex matcher" \
+  --json \
+  --explain
+```
+
+This reports the matched fields and, for the top results, Tantivy's full score
+explanation. By comparison, `rg --json` provides structured match events rather
+than relevance scores.-->
+
+### Choose the tool based on the task
+
+| Use case | Prefer |
+| --- | --- |
+| Find an exact string, regex, or every occurrence | `ripgrep` |
+| Search any file type immediately, without an index | `ripgrep` |
+| Discover likely Rust entities or Markdown sections by concept | `srcsearch` |
+| Match query terms across the fields of one Rust entity | `srcsearch` |
+| Search Markdown and Rust documentation/comments while excluding code | `srcsearch --scope doc` |
+
+A productive workflow is to use `srcsearch` for discovery and then `ripgrep` for
+exhaustive inspection. For example, `srcsearch` can identify names such as
+`MultiLine`, `MultilineDotall`, and `Searcher`; once you know those names, `rg` can
+find every exact occurrence and support regex-based follow-up searches.
 
 ---
 
