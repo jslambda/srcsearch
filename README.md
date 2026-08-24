@@ -20,12 +20,12 @@ entities when the query terms may occur in different parts of an entity.
 `srcsearch` parses and indexes Rust entities and Markdown sections. A Rust result
 can rank because a query matches information distributed across its name,
 signature, documentation, and code. Markdown titles and section bodies are also
-stored as distinct fields. It then ranks those entities using BM25.
+stored as distinct fields.
 
-### Find information distributed across a Rust entity
+### Example1: Find information distributed across a Rust entity
 
 Suppose you are exploring the ripgrep repository and ask where multiline searching
-is implemented. After indexing the repository, run:
+is implemented. After indexing the repository (you can run `scripts/srcreindex` inside ripgrep folder), run the following inside ripgrep folder:
 
 ```bash
 srcsearch search \
@@ -59,7 +59,7 @@ such as `multiline search` and `multiline searches`. What it does not do is grou
 those lines into Rust entities or rank the entities. Use `srcsearch` to discover
 the likely implementation units, then `rg` to inspect every textual occurrence.
 
-### Search for a concept without knowing its wording
+### Example2: Search for a concept without knowing its wording
 
 If you want documentation about searching for files, an exact search is narrow:
 
@@ -96,28 +96,28 @@ GUIDE.md:949:1: Reducing preprocessor overhead
 ```
 
 The query finds conceptual sections such as `Recursive search` and `Manual
-filtering: file types` even though the exact phrase does not occur. It matched 318
+filtering: file types` even though the exact phrase does not occur. If you add `--limit 1000` 
+to the searchc command, you can see that it matches 318
 documentation entities in total; the CLI shows the 10 highest-ranked results by
 default. Ranking matters here because the goal is to find a useful starting point,
 not to print hundreds of unranked occurrences.
 
-Relevance remains query- and corpus-dependent. For example, `File encoding` ranks
+<!--Relevance remains query- and corpus-dependent. For example, `File encoding` ranks
 above `Manual filtering: file types`, so BM25 order is not a ground-truth judgment.
 Documentation fields also use English stemming, allowing `run` to match inflected
-forms such as `running`.
+forms such as `running`.-->
 
-Similarly, a query for `regex matcher` returns 270 entities and ranks the matcher
+<!--A srcsearch query for `regex matcher` ranks the matcher
 tests, matcher implementations, and the `grep-regex` crate documentation near the
 top. An exhaustive `rg -n -i 'regex|matcher'` search returns 2,027 matching lines
 in 88 files. These queries are not semantically identical; the comparison shows
 the difference between ranked entity retrieval and exhaustive line retrieval, not
-that one tool has universally better recall.
+that one tool has universally better recall.-->
 
-The figures above were reproduced on 2026-08-22 with `srcsearch 0.2.0` and
+The figures above were reproduced with `srcsearch 0.2.0` and
 `ripgrep 15.2.0`, using ripgrep repository commit
 `3fce3b5bb0236da2df6d99672afb8a719642eca7`. Full entity counts were obtained
-with `--limit 100000`, which exceeded the number of matches for each query. The
-reproducibility script is `.project/reproduce-ripgrep-experiments.sh`.
+with `--limit 100000`, which exceeded the number of matches for each query.
 
 ### Know the limitation: ranked lexical search is not semantic understanding
 
@@ -127,7 +127,7 @@ matching is performed` can rank individually related terms—for example, discus
 of globs compiled to regular expressions—without answering the intended question.
 More specific concept terms usually produce better results.
 
-Use score explanations to understand a surprising result:
+<!--Use score explanations to understand a surprising result:
 
 ```bash
 srcsearch search \
@@ -139,7 +139,7 @@ srcsearch search \
 
 This reports the matched fields and, for the top results, Tantivy's full score
 explanation. By comparison, `rg --json` provides structured match events rather
-than relevance scores.
+than relevance scores.-->
 
 ### Choose the tool based on the task
 
