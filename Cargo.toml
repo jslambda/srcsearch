@@ -2,7 +2,7 @@
 name = "srcsearch"
 version = "0.2.0"
 edition = "2024"
-description = "Index Rust source and Markdown docs, then search them with Tantivy"
+description = "Index Rust and Python source plus Markdown docs, then search them with Tantivy"
 repository = "https://github.com/jslambda/srcsearch"
 readme = "README.md"
 license = "MIT"
@@ -14,10 +14,10 @@ exclude = ["tests/fixtures/**"]
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 markdown2json = "0.1.1"
+python-indexer = { path = "crates/python-indexer" }
 rust2json = "0.1.0"
 regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 walkdir = "2.5"
 tantivy = "0.25.0"
-python-indexer = { path = "crates/python-indexer" }

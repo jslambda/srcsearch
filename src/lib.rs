@@ -1,6 +1,6 @@
 //! # srcsearch
 //!
-//! `srcsearch` indexes Rust source and Markdown documentation, and supports
+//! `srcsearch` indexes Rust and Python source plus Markdown documentation, and supports
 //! full-text lookup over indexed content through Tantivy.
 //!
 //! ## Typical workflow
@@ -12,8 +12,9 @@
 //! See the project README for CLI examples and end-to-end usage.
 
 use markdown2json::{CodeBlock, Section, index_markdown};
+use python_indexer::{IndexEntry as PythonIndexEntry, build_file_index as build_python_file_index};
 use regex::Regex;
-use rust2json::{IndexEntry, build_file_index};
+use rust2json::{IndexEntry as RustIndexEntry, build_file_index as build_rust_file_index};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs;
@@ -35,7 +36,8 @@ const DOC_TEXT_ANALYZER: &str = "doc_text_en_stem";
 #[derive(Debug)]
 pub enum SearchRecord {
     MarkdownSection { file_path: String, section: Section },
-    RustIndexEntry(IndexEntry),
+    RustIndexEntry(RustIndexEntry),
+    PythonIndexEntry(PythonIndexEntry),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +70,7 @@ pub enum SearchScope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SupportedFileKind {
     Rust,
+    Python,
     Markdown,
 }
 
@@ -79,8 +82,9 @@ impl Clone for SearchRecord {
                 section: section.clone(),
             },
             SearchRecord::RustIndexEntry(entry) => {
-                SearchRecord::RustIndexEntry(clone_index_entry(entry))
+                SearchRecord::RustIndexEntry(clone_rust_index_entry(entry))
             }
+            SearchRecord::PythonIndexEntry(entry) => SearchRecord::PythonIndexEntry(entry.clone()),
         }
     }
 }
@@ -92,6 +96,7 @@ enum SearchRecordDef {
         section: SectionDef,
     },
     RustIndexEntry(IndexEntryDef),
+    PythonIndexEntry(IndexEntryDef),
 }
 
 impl Serialize for SearchRecord {
@@ -125,6 +130,9 @@ impl From<&SearchRecord> for SearchRecordDef {
             SearchRecord::RustIndexEntry(entry) => {
                 SearchRecordDef::RustIndexEntry(IndexEntryDef::from(entry))
             }
+            SearchRecord::PythonIndexEntry(entry) => {
+                SearchRecordDef::PythonIndexEntry(IndexEntryDef::from(entry))
+            }
         }
     }
 }
@@ -139,7 +147,10 @@ impl From<SearchRecordDef> for SearchRecord {
                 }
             }
             SearchRecordDef::RustIndexEntry(entry) => {
-                SearchRecord::RustIndexEntry(IndexEntry::from(entry))
+                SearchRecord::RustIndexEntry(RustIndexEntry::from(entry))
+            }
+            SearchRecordDef::PythonIndexEntry(entry) => {
+                SearchRecord::PythonIndexEntry(PythonIndexEntry::from(entry))
             }
         }
     }
@@ -237,8 +248,8 @@ struct IndexEntryDef {
     doc: Option<String>,
 }
 
-impl From<&IndexEntry> for IndexEntryDef {
-    fn from(entry: &IndexEntry) -> Self {
+impl From<&RustIndexEntry> for IndexEntryDef {
+    fn from(entry: &RustIndexEntry) -> Self {
         Self {
             kind: entry.kind.clone(),
             name: entry.name.clone(),
@@ -252,7 +263,7 @@ impl From<&IndexEntry> for IndexEntryDef {
     }
 }
 
-impl From<IndexEntryDef> for IndexEntry {
+impl From<IndexEntryDef> for RustIndexEntry {
     fn from(entry: IndexEntryDef) -> Self {
         Self {
             kind: entry.kind,
@@ -267,8 +278,38 @@ impl From<IndexEntryDef> for IndexEntry {
     }
 }
 
-fn clone_index_entry(entry: &IndexEntry) -> IndexEntry {
-    IndexEntry {
+impl From<&PythonIndexEntry> for IndexEntryDef {
+    fn from(entry: &PythonIndexEntry) -> Self {
+        Self {
+            kind: entry.kind.clone(),
+            name: entry.name.clone(),
+            file: entry.file.clone(),
+            line_start: entry.line_start,
+            line_end: entry.line_end,
+            signature: entry.signature.clone(),
+            doc_summary: entry.doc_summary.clone(),
+            doc: entry.doc.clone(),
+        }
+    }
+}
+
+impl From<IndexEntryDef> for PythonIndexEntry {
+    fn from(entry: IndexEntryDef) -> Self {
+        Self {
+            kind: entry.kind,
+            name: entry.name,
+            file: entry.file,
+            line_start: entry.line_start,
+            line_end: entry.line_end,
+            signature: entry.signature,
+            doc_summary: entry.doc_summary,
+            doc: entry.doc,
+        }
+    }
+}
+
+fn clone_rust_index_entry(entry: &RustIndexEntry) -> RustIndexEntry {
+    RustIndexEntry {
         kind: entry.kind.clone(),
         name: entry.name.clone(),
         file: entry.file.clone(),
@@ -280,14 +321,17 @@ fn clone_index_entry(entry: &IndexEntry) -> IndexEntry {
     }
 }
 
-/// Collects Rust and Markdown files under a project root while honoring ignore rules.
-pub fn collect_files(project_root: &Path) -> AppResult<(Vec<PathBuf>, Vec<PathBuf>)> {
+/// Collects Rust, Python, and Markdown files under a project root while honoring ignore rules.
+pub fn collect_files(project_root: &Path) -> AppResult<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)> {
     collect_supported_files(project_root)
 }
 
-/// Walks a directory and separates supported files into Rust and Markdown buckets.
-fn collect_supported_files(target_dir: &Path) -> AppResult<(Vec<PathBuf>, Vec<PathBuf>)> {
+/// Walks a directory and separates supported files into Rust, Python, and Markdown buckets.
+fn collect_supported_files(
+    target_dir: &Path,
+) -> AppResult<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)> {
     let mut rust_files = Vec::new();
+    let mut python_files = Vec::new();
     let mut markdown_files = Vec::new();
 
     for entry in WalkDir::new(target_dir)
@@ -302,18 +346,20 @@ fn collect_supported_files(target_dir: &Path) -> AppResult<(Vec<PathBuf>, Vec<Pa
 
         match classify_supported_file(entry.path()) {
             Some(SupportedFileKind::Rust) => rust_files.push(entry.path().to_path_buf()),
+            Some(SupportedFileKind::Python) => python_files.push(entry.path().to_path_buf()),
             Some(SupportedFileKind::Markdown) => markdown_files.push(entry.path().to_path_buf()),
             None => {}
         }
     }
 
-    Ok((rust_files, markdown_files))
+    Ok((rust_files, python_files, markdown_files))
 }
 
 /// Classifies a path by extension into a supported source type for indexing.
 fn classify_supported_file(path: &Path) -> Option<SupportedFileKind> {
     match path.extension().and_then(|ext| ext.to_str()) {
         Some("rs") => Some(SupportedFileKind::Rust),
+        Some("py") => Some(SupportedFileKind::Python),
         Some("md") => Some(SupportedFileKind::Markdown),
         _ => None,
     }
@@ -336,17 +382,19 @@ pub fn index_project(project_root: &Path) -> AppResult<Vec<SearchRecord>> {
 
 /// Indexes either a single file or directory and normalizes file paths relative to `project_root`.
 pub fn index_target(target: &Path, project_root: &Path) -> AppResult<Vec<SearchRecord>> {
-    let (rust_files, markdown_files) = if target.is_dir() {
+    let (rust_files, python_files, markdown_files) = if target.is_dir() {
         collect_supported_files(target)?
     } else if target.is_file() {
         let mut rust_files = Vec::new();
+        let mut python_files = Vec::new();
         let mut markdown_files = Vec::new();
         match classify_supported_file(target) {
             Some(SupportedFileKind::Rust) => rust_files.push(target.to_path_buf()),
+            Some(SupportedFileKind::Python) => python_files.push(target.to_path_buf()),
             Some(SupportedFileKind::Markdown) => markdown_files.push(target.to_path_buf()),
             None => {}
         }
-        (rust_files, markdown_files)
+        (rust_files, python_files, markdown_files)
     } else {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
@@ -387,7 +435,7 @@ pub fn index_target(target: &Path, project_root: &Path) -> AppResult<Vec<SearchR
     for path in rust_files {
         let relative = path.strip_prefix(project_root).unwrap_or(&path);
         let relative_str = relative.to_string_lossy().into_owned();
-        let mut entries = build_file_index(&path).map_err(|err| {
+        let mut entries = build_rust_file_index(&path).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("failed to index rust file {}: {err}", path.display()),
@@ -397,6 +445,21 @@ pub fn index_target(target: &Path, project_root: &Path) -> AppResult<Vec<SearchR
             entry.file = relative_str.clone();
         }
         records.extend(entries.into_iter().map(SearchRecord::RustIndexEntry));
+    }
+
+    for path in python_files {
+        let relative = path.strip_prefix(project_root).unwrap_or(&path);
+        let relative_str = relative.to_string_lossy().into_owned();
+        let mut entries = build_python_file_index(&path).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("failed to index Python file {}: {err}", path.display()),
+            )
+        })?;
+        for entry in &mut entries {
+            entry.file = relative_str.clone();
+        }
+        records.extend(entries.into_iter().map(SearchRecord::PythonIndexEntry));
     }
 
     Ok(records)
@@ -739,7 +802,31 @@ fn build_tantivy_document(
                 document.add_text(schema_fields.doc_field, doc_text);
             }
             if let Some(root) = project_root {
-                if let Some(code_snippet) = extract_code_snippet(root, entry)? {
+                if let Some(code_snippet) =
+                    extract_code_snippet(root, &entry.file, entry.line_start, entry.line_end)?
+                {
+                    document.add_text(schema_fields.code_field, code_snippet);
+                }
+            }
+            document
+        }
+        SearchRecord::PythonIndexEntry(entry) => {
+            let mut document = doc!(
+                schema_fields.record_type => "python",
+                schema_fields.file_path => entry.file.clone(),
+                schema_fields.name => entry.name.clone(),
+                schema_fields.kind => entry.kind.clone(),
+                schema_fields.signature => entry.signature.clone(),
+                schema_fields.line_start => u64::from(entry.line_start),
+                schema_fields.line_end => u64::from(entry.line_end),
+            );
+            if let Some(doc_text) = &entry.doc {
+                document.add_text(schema_fields.doc_field, doc_text);
+            }
+            if let Some(root) = project_root {
+                if let Some(code_snippet) =
+                    extract_code_snippet(root, &entry.file, entry.line_start, entry.line_end)?
+                {
                     document.add_text(schema_fields.code_field, code_snippet);
                 }
             }
@@ -981,10 +1068,15 @@ fn extract_matching_terms(explanation: &str, schema: &Schema) -> Vec<MatchedTerm
     matches
 }
 
-// TODO: we call this function for every Rust symbol. Better to go through the files, and
+// TODO: we call this function for every source symbol. Better to go through the files, and
 // index the code snippets
-fn extract_code_snippet(project_root: &Path, entry: &IndexEntry) -> AppResult<Option<String>> {
-    let source = project_root.join(&entry.file);
+fn extract_code_snippet(
+    project_root: &Path,
+    file: &str,
+    line_start: u32,
+    line_end: u32,
+) -> AppResult<Option<String>> {
+    let source = project_root.join(file);
     if !source.exists() {
         return Ok(None);
     }
@@ -996,8 +1088,8 @@ fn extract_code_snippet(project_root: &Path, entry: &IndexEntry) -> AppResult<Op
         )
     })?;
 
-    let start = entry.line_start.saturating_sub(1) as usize;
-    let end = entry.line_end as usize;
+    let start = line_start.saturating_sub(1) as usize;
+    let end = line_end as usize;
     let lines: Vec<&str> = src.lines().collect();
     if start >= lines.len() || start >= end {
         return Ok(None);
@@ -1177,9 +1269,10 @@ mod tests {
             doc: None,
         };
 
-        let snippet = extract_code_snippet(fixture_root, &entry)
-            .expect("snippet extraction should succeed")
-            .expect("snippet should exist");
+        let snippet =
+            extract_code_snippet(fixture_root, &entry.file, entry.line_start, entry.line_end)
+                .expect("snippet extraction should succeed")
+                .expect("snippet should exist");
 
         assert!(snippet.contains("pub fn add_one"));
         assert!(!snippet.contains("#[cfg(test)]"));

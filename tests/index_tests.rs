@@ -2,6 +2,7 @@ use std::path::Path;
 
 use srcsearch::{
     SearchRecord, SearchScope, index_project, index_target, search_tantivy_index_with_explain,
+    write_tantivy_index,
 };
 use tantivy::schema::Value;
 
@@ -28,6 +29,7 @@ fn indexes_markdown_and_rust() -> std::result::Result<(), Box<dyn std::error::Er
                     saw_rust = true;
                 }
             }
+            SearchRecord::PythonIndexEntry(_) => {}
         }
     }
 
@@ -162,6 +164,49 @@ fn index_target_supports_single_file() -> std::result::Result<(), Box<dyn std::e
         } if file_path.ends_with("guide.md")
     )));
 
+    Ok(())
+}
+
+#[test]
+fn indexes_and_searches_python_source() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let root = std::env::temp_dir().join(format!("srcsearch-python-tests-{unique}"));
+    let index_dir = root.join("index");
+    fs::create_dir_all(&root)?;
+    fs::write(
+        root.join("service.py"),
+        "def greet(name: str) -> str:\n    \"\"\"Return a greeting.\"\"\"\n    return f\"Hello, {name}\"\n",
+    )?;
+
+    let records = index_project(&root)?;
+    assert!(records.iter().any(|record| matches!(
+        record,
+        SearchRecord::PythonIndexEntry(entry)
+            if entry.file == "service.py"
+                && entry.name == "greet"
+                && entry.doc_summary.as_deref() == Some("Return a greeting.")
+    )));
+
+    let serialized = serde_json::to_string(&records)?;
+    let restored: Vec<SearchRecord> = serde_json::from_str(&serialized)?;
+    assert!(
+        restored
+            .iter()
+            .any(|record| matches!(record, SearchRecord::PythonIndexEntry(_)))
+    );
+
+    write_tantivy_index(&records, &index_dir, Some(&root))?;
+    let hits = search_tantivy_index_with_explain(&index_dir, "greet", 10, SearchScope::All, false)?;
+    assert!(hits.iter().any(|hit| {
+        hit.hit.record_type == "python"
+            && hit.hit.file_path == "service.py"
+            && hit.hit.name.as_deref() == Some("greet")
+    }));
+
+    fs::remove_dir_all(&root)?;
     Ok(())
 }
 
