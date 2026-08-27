@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use ruff_python_ast::{Expr, Stmt};
+use ruff_python_ast::{Decorator, Expr, Stmt};
 use ruff_python_parser::parse_module;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,6 +74,7 @@ fn index_suite(path: &Path, source: &str, suite: &[Stmt]) -> Vec<IndexEntry> {
                 source,
                 function.range.start().into(),
                 function.range.end().into(),
+                declaration_start(function.range.start().into(), &function.decorator_list),
                 function.body.as_slice(),
             )],
             Stmt::ClassDef(class) => {
@@ -84,6 +85,7 @@ fn index_suite(path: &Path, source: &str, suite: &[Stmt]) -> Vec<IndexEntry> {
                     source,
                     class.range.start().into(),
                     class.range.end().into(),
+                    declaration_start(class.range.start().into(), &class.decorator_list),
                     class.body.as_slice(),
                 )];
                 entries.extend(class.body.iter().filter_map(|statement| {
@@ -97,6 +99,7 @@ fn index_suite(path: &Path, source: &str, suite: &[Stmt]) -> Vec<IndexEntry> {
                         source,
                         method.range.start().into(),
                         method.range.end().into(),
+                        declaration_start(method.range.start().into(), &method.decorator_list),
                         method.body.as_slice(),
                     ))
                 }));
@@ -115,6 +118,7 @@ fn build_entry(
     source: &str,
     start: u32,
     end: u32,
+    signature_start: u32,
     body: &[Stmt],
 ) -> IndexEntry {
     let (doc_summary, doc) = extract_docs(body);
@@ -124,10 +128,18 @@ fn build_entry(
         file: file.to_string_lossy().into_owned(),
         line_start: line_number(source, start as usize),
         line_end: line_number(source, end as usize),
-        signature: signature(source, start as usize, body),
+        signature: signature(source, signature_start as usize, body),
         doc_summary,
         doc,
     }
+}
+
+/// Returns the source offset after the final decorator, if the declaration has one.
+fn declaration_start(start: u32, decorators: &[Decorator]) -> u32 {
+    decorators
+        .last()
+        .map(|decorator| decorator.range.end().into())
+        .unwrap_or(start)
 }
 
 /// Returns the one-based line number containing `offset`.
@@ -155,7 +167,7 @@ fn signature(source: &str, start: usize, body: &[Stmt]) -> String {
         .to_string()
 }
 
-/// Removes leading decorators from a declaration header.
+/// Skips whitespace and comments before the declaration header.
 fn declaration_header(header: &str) -> &str {
     let mut offset = 0;
     for line in header.split_inclusive('\n') {
