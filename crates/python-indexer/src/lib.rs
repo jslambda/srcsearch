@@ -292,6 +292,22 @@ value = 42
     }
 
     #[test]
+    /// Verifies decorator strings cannot be mistaken for a declaration header.
+    fn ignores_declaration_like_lines_inside_decorator_strings() -> Result<(), Box<dyn Error>> {
+        let path = temporary_path("decorator_string");
+        fs::write(
+            &path,
+            "@decorate(\n    \"\"\"\ndef not_a_declaration():\n    \"\"\"\n)\ndef greet() -> str:\n    return \"hello\"\n",
+        )?;
+        let entries = build_file_index(&path)?;
+        fs::remove_file(&path)?;
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].signature, "def greet() -> str");
+        Ok(())
+    }
+
+    #[test]
     /// Verifies recursive indexing uses project-relative paths.
     fn recursively_indexes_python_files_with_relative_paths() -> Result<(), Box<dyn Error>> {
         let root = temporary_path("project");
