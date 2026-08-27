@@ -1,0 +1,8 @@
+[package]
+name = "python-indexer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ruff_python_parser = "0.0.10"
+ruff_python_ast = "0.0.10"
