@@ -241,7 +241,7 @@ impl From<SectionDef> for Section {
 struct IndexEntryDef {
     kind: String,
     name: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     qualified_name: Option<String>,
     file: String,
     line_start: u32,
@@ -256,7 +256,7 @@ impl From<&RustIndexEntry> for IndexEntryDef {
         Self {
             kind: entry.kind.clone(),
             name: entry.name.clone(),
-            qualified_name: Some(entry.name.clone()),
+            qualified_name: None,
             file: entry.file.clone(),
             line_start: entry.line_start,
             line_end: entry.line_end,
@@ -803,7 +803,6 @@ fn build_tantivy_document(
                 schema_fields.record_type => "rust",
                 schema_fields.file_path => entry.file.clone(),
                 schema_fields.name => entry.name.clone(),
-                schema_fields.qualified_name => entry.name.clone(),
                 schema_fields.kind => entry.kind.clone(),
                 schema_fields.signature => entry.signature.clone(),
                 schema_fields.line_start => u64::from(entry.line_start),
@@ -1132,7 +1131,7 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
-    use tantivy::schema::{STORED, STRING, Schema, TEXT};
+    use tantivy::schema::{STORED, STRING, Schema, TEXT, Value};
     use tantivy::{Index, doc};
 
     fn temp_path(test_name: &str) -> PathBuf {
@@ -1177,6 +1176,32 @@ mod tests {
         let reader = index.reader().expect("reader should be created");
         let searcher = reader.searcher();
         assert_eq!(searcher.num_docs(), 2);
+        let schema = index.schema();
+        let record_type = schema.get_field("record_type").expect("record type field");
+        let qualified_name = schema
+            .get_field("qualified_name")
+            .expect("qualified name field");
+        let documents = searcher
+            .search(
+                &tantivy::query::AllQuery,
+                &tantivy::collector::TopDocs::with_limit(2),
+            )
+            .expect("documents should be searchable");
+        let rust_document = documents
+            .into_iter()
+            .map(|(_, address)| {
+                searcher
+                    .doc::<tantivy::TantivyDocument>(address)
+                    .expect("document should be readable")
+            })
+            .find(|document| {
+                document
+                    .get_first(record_type)
+                    .and_then(|value| value.as_str())
+                    == Some("rust")
+            })
+            .expect("Rust document should exist");
+        assert!(rust_document.get_first(qualified_name).is_none());
 
         let _ = fs::remove_dir_all(&output_dir);
     }

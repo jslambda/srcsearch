@@ -39,6 +39,15 @@ fn indexes_markdown_and_rust() -> std::result::Result<(), Box<dyn std::error::Er
     let json = serde_json::to_string(&records)?;
     let parsed: serde_json::Value = serde_json::from_str(&json)?;
     assert!(parsed.is_array());
+    let serialized_rust_entry = parsed
+        .as_array()
+        .and_then(|records| {
+            records
+                .iter()
+                .find_map(|record| record.get("RustIndexEntry"))
+        })
+        .expect("expected a serialized Rust entry");
+    assert!(serialized_rust_entry.get("qualified_name").is_none());
 
     Ok(())
 }
