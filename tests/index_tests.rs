@@ -178,7 +178,7 @@ fn indexes_and_searches_python_source() -> std::result::Result<(), Box<dyn std::
     fs::create_dir_all(&root)?;
     fs::write(
         root.join("service.py"),
-        "def greet(name: str) -> str:\n    \"\"\"Return a greeting.\"\"\"\n    return f\"Hello, {name}\"\n",
+        "def greet(name: str) -> str:\n    \"\"\"Return a greeting.\"\"\"\n    return f\"Hello, {name}\"\n\nclass Client:\n    def fetch(self):\n        pass\n\nclass OtherClient:\n    def fetch(self):\n        pass\n",
     )?;
 
     let records = index_project(&root)?;
@@ -191,12 +191,25 @@ fn indexes_and_searches_python_source() -> std::result::Result<(), Box<dyn std::
     )));
 
     let serialized = serde_json::to_string(&records)?;
+    assert!(serialized.contains("\"qualified_name\":\"Client.fetch\""));
+    assert!(serialized.contains("\"qualified_name\":\"OtherClient.fetch\""));
     let restored: Vec<SearchRecord> = serde_json::from_str(&serialized)?;
     assert!(
         restored
             .iter()
             .any(|record| matches!(record, SearchRecord::PythonIndexEntry(_)))
     );
+
+    let method_names: Vec<_> = records
+        .iter()
+        .filter_map(|record| match record {
+            SearchRecord::PythonIndexEntry(entry) if entry.name == "fetch" => {
+                Some(entry.qualified_name.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(method_names, ["Client.fetch", "OtherClient.fetch"]);
 
     write_tantivy_index(&records, &index_dir, Some(&root))?;
     let hits = search_tantivy_index_with_explain(&index_dir, "greet", 10, SearchScope::All, false)?;
@@ -205,6 +218,69 @@ fn indexes_and_searches_python_source() -> std::result::Result<(), Box<dyn std::
             && hit.hit.file_path == "service.py"
             && hit.hit.name.as_deref() == Some("greet")
     }));
+
+    let fetch_hits =
+        search_tantivy_index_with_explain(&index_dir, "fetch", 10, SearchScope::All, false)?;
+    let mut fetch_method_names: Vec<_> = fetch_hits
+        .iter()
+        .filter(|hit| hit.hit.name.as_deref() == Some("fetch"))
+        .filter_map(|hit| hit.hit.qualified_name.as_deref())
+        .collect();
+    fetch_method_names.sort_unstable();
+    assert_eq!(fetch_method_names, ["Client.fetch", "OtherClient.fetch"]);
+
+    let qualified_hits = search_tantivy_index_with_explain(
+        &index_dir,
+        "qualified_name:Client.fetch",
+        10,
+        SearchScope::All,
+        false,
+    )?;
+    assert_eq!(qualified_hits.len(), 1);
+    assert_eq!(
+        qualified_hits[0].hit.qualified_name.as_deref(),
+        Some("Client.fetch")
+    );
+
+    let container_hits = search_tantivy_index_with_explain(
+        &index_dir,
+        "qualified_name:Client",
+        10,
+        SearchScope::All,
+        false,
+    )?;
+    assert_eq!(container_hits.len(), 1);
+    assert_eq!(
+        container_hits[0].hit.qualified_name.as_deref(),
+        Some("Client")
+    );
+
+    for non_exact_query in ["qualified_name:fetch", "qualified_name:client.fetch"] {
+        let hits = search_tantivy_index_with_explain(
+            &index_dir,
+            non_exact_query,
+            10,
+            SearchScope::All,
+            false,
+        )?;
+        assert!(
+            hits.is_empty(),
+            "raw qualified-name field should not match {non_exact_query}"
+        );
+    }
+
+    let other_client_hits = search_tantivy_index_with_explain(
+        &index_dir,
+        "qualified_name:OtherClient.fetch",
+        10,
+        SearchScope::All,
+        false,
+    )?;
+    assert_eq!(other_client_hits.len(), 1);
+    assert_eq!(
+        other_client_hits[0].hit.qualified_name.as_deref(),
+        Some("OtherClient.fetch")
+    );
 
     fs::remove_dir_all(&root)?;
     Ok(())

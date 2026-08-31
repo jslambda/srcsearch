@@ -114,6 +114,7 @@ Example JSON result payload:
       "file_path": "docs/guide.md",
       "title": "Quickstart",
       "name": null,
+      "qualified_name": null,
       "kind": null,
       "signature": null,
       "line_start": 1,
@@ -133,12 +134,13 @@ Example JSON result payload:
 
 #### Search scopes
 
-- `all` (default): query title/body text + Rust symbol/signature/doc/code fields
+- `all` (default): query title/body text + source symbol/qualified-name/signature/doc/code fields
 - `doc`: query title/body text + Rust doc fields only (ignores signatures/code)
 
 Notes:
 
 - Queries run against `title`, `body_text`, and Rust `doc` fields use stemming, so inflected forms (for example `running` vs `run`) may match.
+- Source search hits include `qualified_name`; Python methods use their class-qualified form (for example `Client.fetch`) so identically named methods can be distinguished in text and JSON output.
 
 ### Convenience scripts
 

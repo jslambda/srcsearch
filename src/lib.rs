@@ -47,6 +47,7 @@ pub struct SearchHit {
     pub file_path: String,
     pub title: Option<String>,
     pub name: Option<String>,
+    pub qualified_name: Option<String>,
     pub kind: Option<String>,
     pub signature: Option<String>,
     pub line_start: Option<u64>,
@@ -240,6 +241,8 @@ impl From<SectionDef> for Section {
 struct IndexEntryDef {
     kind: String,
     name: String,
+    #[serde(default)]
+    qualified_name: Option<String>,
     file: String,
     line_start: u32,
     line_end: u32,
@@ -253,6 +256,7 @@ impl From<&RustIndexEntry> for IndexEntryDef {
         Self {
             kind: entry.kind.clone(),
             name: entry.name.clone(),
+            qualified_name: Some(entry.name.clone()),
             file: entry.file.clone(),
             line_start: entry.line_start,
             line_end: entry.line_end,
@@ -283,6 +287,7 @@ impl From<&PythonIndexEntry> for IndexEntryDef {
         Self {
             kind: entry.kind.clone(),
             name: entry.name.clone(),
+            qualified_name: Some(entry.qualified_name.clone()),
             file: entry.file.clone(),
             line_start: entry.line_start,
             line_end: entry.line_end,
@@ -295,9 +300,11 @@ impl From<&PythonIndexEntry> for IndexEntryDef {
 
 impl From<IndexEntryDef> for PythonIndexEntry {
     fn from(entry: IndexEntryDef) -> Self {
+        let qualified_name = entry.qualified_name.unwrap_or_else(|| entry.name.clone());
         Self {
             kind: entry.kind,
             name: entry.name,
+            qualified_name,
             file: entry.file,
             line_start: entry.line_start,
             line_end: entry.line_end,
@@ -707,6 +714,7 @@ fn build_tantivy_schema() -> Schema {
     schema_builder.add_text_field("file_path", STRING | STORED);
     schema_builder.add_text_field("title", doc_text_options.clone());
     schema_builder.add_text_field("name", STRING | STORED);
+    schema_builder.add_text_field("qualified_name", STRING | STORED);
     schema_builder.add_text_field("kind", STRING | STORED);
     schema_builder.add_text_field("signature", TEXT | STORED);
     schema_builder.add_text_field("body_text", doc_text_options.clone());
@@ -732,6 +740,7 @@ struct TantivySchemaFields {
     file_path: Field,
     title: Field,
     name: Field,
+    qualified_name: Field,
     kind: Field,
     signature: Field,
     body_text: Field,
@@ -749,6 +758,7 @@ impl TantivySchemaFields {
             file_path: get_tantivy_doc_field(schema, "file_path")?,
             title: get_tantivy_doc_field(schema, "title")?,
             name: get_tantivy_doc_field(schema, "name")?,
+            qualified_name: get_tantivy_doc_field(schema, "qualified_name")?,
             kind: get_tantivy_doc_field(schema, "kind")?,
             signature: get_tantivy_doc_field(schema, "signature")?,
             body_text: get_tantivy_doc_field(schema, "body_text")?,
@@ -793,6 +803,7 @@ fn build_tantivy_document(
                 schema_fields.record_type => "rust",
                 schema_fields.file_path => entry.file.clone(),
                 schema_fields.name => entry.name.clone(),
+                schema_fields.qualified_name => entry.name.clone(),
                 schema_fields.kind => entry.kind.clone(),
                 schema_fields.signature => entry.signature.clone(),
                 schema_fields.line_start => u64::from(entry.line_start),
@@ -815,6 +826,7 @@ fn build_tantivy_document(
                 schema_fields.record_type => "python",
                 schema_fields.file_path => entry.file.clone(),
                 schema_fields.name => entry.name.clone(),
+                schema_fields.qualified_name => entry.qualified_name.clone(),
                 schema_fields.kind => entry.kind.clone(),
                 schema_fields.signature => entry.signature.clone(),
                 schema_fields.line_start => u64::from(entry.line_start),
@@ -905,6 +917,7 @@ pub fn search_tantivy_index_with_explain(
     let schema = index.schema();
     let title = get_tantivy_doc_field(&schema, "title")?;
     let name = get_tantivy_doc_field(&schema, "name")?;
+    let qualified_name = schema.get_field("qualified_name").ok();
     let signature = get_tantivy_doc_field(&schema, "signature")?;
     let body_text = get_tantivy_doc_field(&schema, "body_text")?;
     let doc_field = get_tantivy_doc_field(&schema, "doc")?;
@@ -918,12 +931,19 @@ pub fn search_tantivy_index_with_explain(
     })?;
     let searcher = reader.searcher();
     let search_fields = match scope {
-        SearchScope::All => vec![title, body_text, name, signature, doc_field, code_field],
+        SearchScope::All => {
+            let mut fields = vec![title, body_text, name, signature, doc_field, code_field];
+            fields.extend(qualified_name);
+            fields
+        }
         SearchScope::Doc => vec![title, body_text, doc_field],
     };
     let mut query_parser = QueryParser::for_index(&index, search_fields);
     query_parser.set_field_boost(title, 4.0);
     query_parser.set_field_boost(name, 4.0);
+    if let Some(qualified_name) = qualified_name {
+        query_parser.set_field_boost(qualified_name, 4.0);
+    }
     query_parser.set_field_boost(doc_field, 2.0);
     query_parser.set_field_boost(signature, 2.0);
     query_parser.set_field_boost(body_text, 2.0);
@@ -997,6 +1017,7 @@ pub fn search_tantivy_index_with_explain(
                 file_path: get_text(file_path).unwrap_or_default(),
                 title: get_text(title),
                 name: get_text(name),
+                qualified_name: qualified_name.and_then(get_text),
                 kind: get_text(kind),
                 signature: get_text(signature),
                 line_start: line_start

@@ -9,6 +9,7 @@ use ruff_python_parser::parse_module;
 pub struct IndexEntry {
     pub kind: String,
     pub name: String,
+    pub qualified_name: String,
     pub file: String,
     pub line_start: u32,
     pub line_end: u32,
@@ -70,6 +71,7 @@ fn index_suite(path: &Path, source: &str, suite: &[Stmt]) -> Vec<IndexEntry> {
             Stmt::FunctionDef(function) => vec![build_entry(
                 if function.is_async { "async_fn" } else { "fn" },
                 function.name.as_str(),
+                function.name.as_str(),
                 path,
                 source,
                 function.range.start().into(),
@@ -80,6 +82,7 @@ fn index_suite(path: &Path, source: &str, suite: &[Stmt]) -> Vec<IndexEntry> {
             Stmt::ClassDef(class) => {
                 let mut entries = vec![build_entry(
                     "class",
+                    class.name.as_str(),
                     class.name.as_str(),
                     path,
                     source,
@@ -95,6 +98,7 @@ fn index_suite(path: &Path, source: &str, suite: &[Stmt]) -> Vec<IndexEntry> {
                     Some(build_entry(
                         if method.is_async { "async_fn" } else { "fn" },
                         method.name.as_str(),
+                        &format!("{}.{}", class.name, method.name),
                         path,
                         source,
                         method.range.start().into(),
@@ -114,6 +118,7 @@ fn index_suite(path: &Path, source: &str, suite: &[Stmt]) -> Vec<IndexEntry> {
 fn build_entry(
     kind: &str,
     name: &str,
+    qualified_name: &str,
     file: &Path,
     source: &str,
     start: u32,
@@ -125,6 +130,7 @@ fn build_entry(
     IndexEntry {
         kind: kind.to_string(),
         name: name.to_string(),
+        qualified_name: qualified_name.to_string(),
         file: file.to_string_lossy().into_owned(),
         line_start: line_number(source, start as usize),
         line_end: line_number(source, end as usize),
@@ -257,6 +263,10 @@ class Client(Base):
         """Fetch a resource."""
         pass
 
+class OtherClient:
+    async def fetch(self, url: str):
+        pass
+
 value = 42
 "#;
         let path = temporary_path("declarations");
@@ -264,9 +274,10 @@ value = 42
         let entries = build_file_index(&path)?;
         fs::remove_file(&path)?;
 
-        assert_eq!(entries.len(), 4);
+        assert_eq!(entries.len(), 6);
         assert_eq!(entries[0].kind, "fn");
         assert_eq!(entries[0].name, "greet");
+        assert_eq!(entries[0].qualified_name, "greet");
         assert_eq!(
             entries[0].signature,
             "def greet(name: str = \"world\") -> str"
@@ -282,8 +293,11 @@ value = 42
         assert_eq!(entries[2].kind, "class");
         assert_eq!(entries[3].kind, "async_fn");
         assert_eq!(entries[3].name, "fetch");
+        assert_eq!(entries[3].qualified_name, "Client.fetch");
         assert_eq!(entries[3].signature, "async def fetch(self, url: str)");
         assert_eq!(entries[3].doc_summary.as_deref(), Some("Fetch a resource."));
+        assert_eq!(entries[5].name, "fetch");
+        assert_eq!(entries[5].qualified_name, "OtherClient.fetch");
         Ok(())
     }
 
