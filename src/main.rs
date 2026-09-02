@@ -114,7 +114,7 @@ fn non_empty(value: Option<&str>) -> Option<&str> {
 fn format_hit_label(hit: &SearchHit) -> String {
     // Field precedence rules (keep stable for deterministic output):
     // 1) markdown prefers section title, then name/signature fallbacks.
-    // 2) rust prefers symbol name, then signature, then title fallback.
+    // 2) source records prefer qualified name, then local name/signature/title.
     // 3) unknown/missing values resolve to "(untitled)".
     match hit.record_type.as_str() {
         "markdown" => non_empty(hit.title.as_deref())
@@ -122,7 +122,8 @@ fn format_hit_label(hit: &SearchHit) -> String {
             .or(non_empty(hit.signature.as_deref()))
             .unwrap_or("(untitled)")
             .to_string(),
-        "rust" => non_empty(hit.name.as_deref())
+        "rust" | "python" => non_empty(hit.qualified_name.as_deref())
+            .or(non_empty(hit.name.as_deref()))
             .or(non_empty(hit.signature.as_deref()))
             .or(non_empty(hit.title.as_deref()))
             .unwrap_or("(untitled)")
@@ -591,12 +592,13 @@ mod tests {
     fn formats_search_result_lines_for_editor_links() {
         let hits = vec![SearchHit {
             score: 1.2345,
-            record_type: "rust".to_string(),
-            file_path: "src/lib.rs".to_string(),
+            record_type: "python".to_string(),
+            file_path: "service.py".to_string(),
             title: None,
-            name: Some("search_tantivy_index".to_string()),
+            name: Some("fetch".to_string()),
+            qualified_name: Some("Client.fetch".to_string()),
             kind: Some("fn".to_string()),
-            signature: Some("pub fn search_tantivy_index(...)".to_string()),
+            signature: Some("def fetch(self)".to_string()),
             line_start: Some(42),
             line_end: Some(47),
             heading_line: None,
@@ -604,7 +606,7 @@ mod tests {
 
         let output = format_search_hits(&hits);
 
-        assert_eq!(output, "src/lib.rs:42:1: search_tantivy_index\n");
+        assert_eq!(output, "service.py:42:1: Client.fetch\n");
     }
 
     #[test]
@@ -615,6 +617,7 @@ mod tests {
             file_path: "README.md".to_string(),
             title: Some("semantic search over code and docs".to_string()),
             name: None,
+            qualified_name: None,
             kind: None,
             signature: None,
             line_start: None,
