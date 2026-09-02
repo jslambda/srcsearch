@@ -361,8 +361,8 @@ GUIDE.md:949:1: Reducing preprocessor overhead
 ```
 
 The query finds conceptual sections such as `Recursive search` and `Manual
-filtering: file types` even though the exact phrase does not occur. If you add `--limit 1000` 
-to the searchc command, you can see that it matches 318
+filtering: file types` even though the exact phrase does not occur. If you add
+`--limit 1000` to the search command, you can see that it matches 318
 documentation entities in total; the CLI shows the 10 highest-ranked results by
 default. Ranking matters here because the goal is to find a useful starting point,
 not to print hundreds of unranked occurrences.
@@ -381,8 +381,7 @@ that one tool has universally better recall.-->
 
 The figures above were reproduced with `srcsearch 0.2.0` and
 `ripgrep 15.2.0`, using ripgrep repository commit
-`3fce3b5bb0236da2df6d99672afb8a719642eca7`. Full entity counts were obtained
-with `--limit 100000`, which exceeded the number of matches for each query.
+`3fce3b5bb0236da2df6d99672afb8a719642eca7`.
 
 ### Know the limitation: ranked lexical search is not semantic understanding
 
