@@ -139,18 +139,65 @@ When multiline mode is enabled, ripgrep will lift the restriction that a
 
 ### 4. Search concepts in just enough depth (8:00–12:00)
 
-- **Indexing:** do parsing and text analysis ahead of time so queries can retrieve
-  records efficiently.
-- **Inverted index:** map analyzed terms to the records and fields that contain them.
-- **Relevance ranking:** order plausible results instead of treating all matches as
-  equally useful.
-- **BM25 intuition:** reward informative term matches while accounting for term
-  frequency, corpus rarity, and record length.
-- **Fields:** allow matches in a name, signature, documentation, and code to contribute
-  to the result as parts of one entity.
-- Draw the boundary clearly: BM25 is lexical ranking. It can rank related word forms
-  and distributed term matches, but it does not understand meaning like a semantic or
-  vector search system.
+- Begin with the job of an index: spend time before the query parsing records and
+  analyzing their text so that a search does not have to scan every byte in the
+  repository. Analysis breaks text into terms, normalizes them, and—for selected
+  documentation fields—stems related forms such as `search`, `searching`, and
+  `searched` toward the same searchable term.
+- Introduce an **inverted index** by reversing the usual view of the source. Instead
+  of asking “which words are in this record?”, store “which records contain this
+  word?” For a tiny corpus, the postings might look like:
+
+  ```text
+  multiline -> Multiline flag, MultiLine implementation, Feature comparison
+  search    -> Multiline flag, MultiLine implementation, Searcher, ...
+  ```
+
+  Each posting also retains information such as the field and frequency of the term.
+  Looking up the postings for `multiline` and `search` quickly produces candidate
+  records; ranking decides which candidate to show first.
+- Use **TF-IDF** to build the ranking intuition one piece at a time:
+  - **Term frequency (TF):** a term appearing several times in a record is usually
+    stronger evidence than a single incidental mention. A `Multiline` entity whose
+    documentation repeatedly discusses searching is therefore more promising than
+    a record that mentions it once.
+  - **Inverse document frequency (IDF):** a term found in only a few records carries
+    more information than a term found almost everywhere. In this corpus,
+    `multiline` is likely more discriminating than the common term `search`.
+  - The simplified mental model is:
+
+    ```text
+    score(record, query) = sum(TF(term, record) * IDF(term))
+    IDF(term)             ≈ log(total records / records containing term)
+    ```
+
+    Do not calculate the score on stage; use the formula to tell the story: repeated
+    matches help, rare terms help more, and evidence from all query terms is added
+    into one relevance score.
+- Connect that intuition to **BM25**, which `srcsearch` actually uses. BM25 keeps the
+  useful TF-IDF idea that frequent and rare terms contribute differently, but makes
+  two important refinements:
+  - term-frequency saturation: the tenth repetition of `search` adds much less
+    evidence than the first few repetitions;
+  - length normalization: a match in a compact function or type is not automatically
+    overwhelmed by a very long source or documentation record containing more words.
+- Explain **fields** as several searchable views of the same entity. A Rust record
+  has fields such as name, signature, documentation, and code. Their matches can be
+  combined into one score, while field boosts can make a match in a descriptive name
+  or signature more influential than the same term buried in a long body. This is
+  why `multiline` in a declaration and `search` in its documentation can jointly
+  retrieve the complete `Multiline` entity.
+- Summarize the retrieval path:
+
+  ```text
+  query terms -> postings -> candidate records -> BM25 scores -> ranked results
+  ```
+
+- Draw the boundary clearly: TF-IDF and BM25 rank lexical evidence. Text analysis can
+  connect word forms and an entity can combine terms from several fields, but neither
+  method understands intent or meaning like a semantic or vector search system.
+
+- Stemming
 
 ### 5. How `srcsearch` builds and searches the index (12:00–16:00)
 
