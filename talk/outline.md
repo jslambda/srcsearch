@@ -1,3 +1,5 @@
+<!--The outline follows proposal.md-->
+
 # Beyond grep: structure-aware search for Rust code with `srcsearch`
 
 ## Talk details
