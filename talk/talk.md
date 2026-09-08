@@ -31,14 +31,80 @@ By the end of the talk, the audience should understand:
 
 ### 1. Opening: a search where the exact words are unknown (0:00–2:00)
 
-- Open with a question from an unfamiliar repository: “Where is multiline searching
-  implemented?”
-- Point out that the intent is clear, but the identifier, file, and exact wording are
-  unknown.
+- Put the audience in a concrete situation: you have just joined the `ripgrep`
+  project and need to change how multiline searching works. Before editing anything,
+  you must answer: “Where is multiline searching implemented?”
+- Point out what is missing: you do not know whether the relevant identifier is
+  `Multiline`, `MultiLine`, or something else, which crate owns it, or what exact
+  phrase appears in the source.
+- Start with the natural line-oriented search:
+
+  ```bash
+  % rg --vimgrep 'multiline.*search'
+  ###
+  tests/multiline.rs:20:25:// Tests that even in a multiline search, a '.' does not match a newline.
+  tests/multiline.rs:91:15:// Tests that multiline search works when reading from stdin. This is an
+  tests/multiline.rs:92:27:// important test because multiline search must read the entire contents of
+  tests/multiline.rs:103:14:// Test that multiline search and contextual matches work.
+  CHANGELOG.md:524:58:  Fix bug where `\A` could produce unanchored matches in multiline search.
+  tests/tests.rs:22:24:// Tests for ripgrep's multiline search support.
+  README.md:220:1:multiline search and opt-in fancy regex support via PCRE2.
+  FAQ.md:519:24:slower when performing multiline searches? Well, that's because there are
+  FAQ.md:654:40:for line-by-line searching by enabling multiline search. After all, our
+  FAQ.md:682:58:valid UTF-8 to PCRE2. Unfortunately, one key downside of multiline search is
+  crates/core/flags/defs.rs:4541:38:default. This flag only applies when multiline search is enabled.
+  crates/core/flags/defs.rs:4610:29:match line terminators when multiline searching is enabled. This flag has no
+  crates/core/flags/defs.rs:4611:11:effect if multiline searching isn't enabled with the \flag{multiline} flag.
+  ```
+
+  It returns 13 matching lines across 6 files in the pinned repository, including
+  prose containing phrases such as `multiline search` and `multiline searches`.
+  Those matches are accurate, but the audience must still decide which complete
+  code unit is the useful starting point.
+- Then reveal the same question as a structural query:
+
+  ```bash
+  srcsearch search \
+    --index-dir .srcsearch \
+    --query 'multiline AND search'
+  ```
+
+  The ranked results begin with the `Multiline` flag entity, followed by entities
+  such as `MultiLine`, `Searcher`, and `MultilineDotall`. In the first result,
+  `multiline` comes from the declaration while `search` appears in its methods and
+  documentation; no single matching line has to contain the whole clue.
 - Introduce the talk's question: what should a source-search tool return when we know
   the concept but not the text?
 - State the thesis: the right result may be a complete code entity, not a matching
   line.
+
+```rust
+impl Flag for Multiline {
+    fn is_switch(&self) -> bool {
+        true
+    }
+    fn name_short(&self) -> Option<u8> {
+        Some(b'U')
+    }
+    fn name_long(&self) -> &'static str {
+        "multiline"
+    }
+    fn name_negated(&self) -> Option<&'static str> {
+        Some("no-multiline")
+    }
+    fn doc_category(&self) -> Category {
+        Category::Search
+    }
+    fn doc_short(&self) -> &'static str {
+        r"Enable searching across multiple lines."
+    }
+    fn doc_long(&self) -> &'static str {
+        r#"
+This flag enables searching across multiple lines.
+.sp
+When multiline mode is enabled, ripgrep will lift the restriction that a
+
+```
 
 ### 2. `ripgrep` solves a different problem well (2:00–5:00)
 
