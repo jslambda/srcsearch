@@ -2,12 +2,6 @@
 
 # Beyond grep: structure-aware search for Rust code with `srcsearch`
 
-## Talk details
-
-- Speaker: Hamid Alavi Toussi
-- Talk length: 30 minutes, excluding Q&A
-- Format: explanation supported by a live demo of `ripgrep` and `srcsearch`
-- Example codebase: `ripgrep`
 
 ## Central idea
 
@@ -17,7 +11,7 @@ match text. It is the unit they search. `ripgrep` returns matching lines, while
 complementary: use structural search to discover likely implementation units,
 then use line-oriented search for precise and exhaustive inspection.
 
-## Audience takeaways
+<!--## Audience takeaways
 
 By the end of the talk, the audience should understand:
 
@@ -25,15 +19,18 @@ By the end of the talk, the audience should understand:
 - the roles of indexing, fields, BM25, and relevance ranking;
 - how `srcsearch` turns Rust entities and Markdown sections into searchable records;
 - when to choose `srcsearch`, `ripgrep`, or a combination of both;
-- why lexical ranking is useful for coding agents, but is not semantic understanding.
+- why lexical ranking is useful for coding agents, but is not semantic understanding.-->
 
 ## Outline
 
-### 1. Opening: a search where the exact words are unknown (0:00–2:00)
+### 1. Motivating example: a search where the exact words are unknown 
 
 - Put the audience in a concrete situation: you have just joined the `ripgrep`
   project and need to change how multiline searching works. Before editing anything,
-  you must answer: “Where is multiline searching implemented?”
+  you must answer: 
+
+  “Where is multiline searching implemented?”
+
 - Point out what is missing: you do not know whether the relevant identifier is
   `Multiline`, `MultiLine`, or something else, which crate owns it, or what exact
   phrase appears in the source.
@@ -56,7 +53,8 @@ By the end of the talk, the audience should understand:
   crates/core/flags/defs.rs:4610:29:match line terminators when multiline searching is enabled. This flag has no
   crates/core/flags/defs.rs:4611:11:effect if multiline searching isn't enabled with the \flag{multiline} flag.
   ```
-
+  <!--the results under tests are testing multiline search but the tests are generic, and does
+  not point to the specific implementation we are after.-->
   It returns 13 matching lines across 6 files in the pinned repository, including
   prose containing phrases such as `multiline search` and `multiline searches`.
   Those matches are accurate, but the audience must still decide which complete
@@ -72,7 +70,7 @@ By the end of the talk, the audience should understand:
   The ranked results begin with the `Multiline` flag entity, followed by entities
   such as `MultiLine`, `Searcher`, and `MultilineDotall`. In the first result,
   `multiline` comes from the declaration while `search` appears in its methods and
-  documentation; no single matching line has to contain the whole clue.
+  documentation; **no single matching line has to contain the whole clue.**
 - Introduce the talk's question: what should a source-search tool return when we know
   the concept but not the text?
 - State the thesis: the right result may be a complete code entity, not a matching
