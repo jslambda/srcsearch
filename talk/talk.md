@@ -104,6 +104,26 @@ When multiline mode is enabled, ripgrep will lift the restriction that a
 
 ```
 
+```
+hamid@fast ripgrep % srcsearch search -i .srcsearch -q "search AND multiline" --explain --json | summarize.py
+crates/core/flags/defs.rs:4503:1: Flag for Multiline (score: 18.597)
+term         field          score percent  boost      base   freq      idf      dl     avgdl       n
+search       code           1.734    9.3%    1.0     1.734    2.0    2.045   472.0   147.008   182.0
+multiline    signature     16.862   90.7%    1.0    16.862    1.0    5.112     4.0     3.379     8.0
+-----------------
+crates/searcher/src/searcher/glue.rs:149:1: MultiLine < 's , M , S > (score: 10.925)
+term         field          score percent  boost      base   freq      idf      dl     avgdl       n
+search       code           1.967   18.0%    1.0     1.967    4.0    2.045   792.0   147.008   182.0
+multiline    signature      8.958   82.0%    1.0     8.958    1.0    5.112    10.0     3.379     8.0
+-----------------
+```
+<!--https://docs.rs/tantivy/latest/tantivy/query/struct.QueryParser.html
+(title:multiline OR body:multiline OR docs:multiline)
+AND
+(title:search OR body:search OR docs:search)
+
+term search penalized because of its high frequency in the corpus
+-->
 ### 2. `ripgrep` solves a different problem well (2:00–5:00)
 
 - Establish `ripgrep` as the baseline rather than the opponent.
