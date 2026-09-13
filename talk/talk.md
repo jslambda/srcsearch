@@ -157,65 +157,191 @@ term search penalized because of its high frequency in the corpus
 
 ### 4. Search concepts in just enough depth (8:00–12:00)
 
-- Begin with the job of an index: spend time before the query parsing records and
-  analyzing their text so that a search does not have to scan every byte in the
-  repository. Analysis breaks text into terms, normalizes them, and—for selected
-  documentation fields—stems related forms such as `search`, `searching`, and
-  `searched` toward the same searchable term.
-- Introduce an **inverted index** by reversing the usual view of the source. Instead
-  of asking “which words are in this record?”, store “which records contain this
-  word?” For a tiny corpus, the postings might look like:
+Use four presentation beats: analysis, candidate retrieval, BM25, and field scoring.
+The equations and numerical examples below also serve as speaker notes; show the
+BM25 formula and one worked comparison during the four-minute slot.
 
-  ```text
-  multiline -> Multiline flag, MultiLine implementation, Feature comparison
-  search    -> Multiline flag, MultiLine implementation, Searcher, ...
-  ```
+#### Analysis: what counts as a term?
 
-  Each posting also retains information such as the field and frequency of the term.
-  Looking up the postings for `multiline` and `search` quickly produces candidate
-  records; ranking decides which candidate to show first.
-- Use **TF-IDF** to build the ranking intuition one piece at a time:
-  - **Term frequency (TF):** a term appearing several times in a record is usually
-    stronger evidence than a single incidental mention. A `Multiline` entity whose
-    documentation repeatedly discusses searching is therefore more promising than
-    a record that mentions it once.
-  - **Inverse document frequency (IDF):** a term found in only a few records carries
-    more information than a term found almost everywhere. In this corpus,
-    `multiline` is likely more discriminating than the common term `search`.
-  - The simplified mental model is:
+An index moves work ahead of query time: parse files into records, analyze each
+searchable field, and store lookup structures. Here a **document** means one indexed
+record (a Rust entity or Markdown section), not necessarily a whole file.
 
-    ```text
-    score(record, query) = sum(TF(term, record) * IDF(term))
-    IDF(term)             ≈ log(total records / records containing term)
-    ```
+Analysis defines which text can match. `srcsearch` uses these field configurations:
 
-    Do not calculate the score on stage; use the formula to tell the story: repeated
-    matches help, rare terms help more, and evidence from all query terms is added
-    into one relevance score.
-- Connect that intuition to **BM25**, which `srcsearch` actually uses. BM25 keeps the
-  useful TF-IDF idea that frequent and rare terms contribute differently, but makes
-  two important refinements:
-  - term-frequency saturation: the tenth repetition of `search` adds much less
-    evidence than the first few repetitions;
-  - length normalization: a match in a compact function or type is not automatically
-    overwhelmed by a very long source or documentation record containing more words.
-- Explain **fields** as several searchable views of the same entity. A Rust record
-  has fields such as name, signature, documentation, and code. Their matches can be
-  combined into one score, while field boosts can make a match in a descriptive name
-  or signature more influential than the same term buried in a long body. This is
-  why `multiline` in a declaration and `search` in its documentation can jointly
-  retrieve the complete `Multiline` entity.
-- Summarize the retrieval path:
+| Fields | Analysis | Example |
+| --- | --- | --- |
+| `title`, `body_text`, `doc` | Split into alphanumeric tokens, lowercase, English stemming | `Searching searched` → `search`, `search` |
+| `signature`, `code` | Default text analyzer: split into alphanumeric tokens, remove overlong tokens, lowercase; no stemming | `MultiLine` → `multiline`; `searching` stays `searching` |
+| `name`, `qualified_name` | Raw whole-value indexing; no lowercasing or stemming | `MultiLine` stays `MultiLine` |
 
-  ```text
-  query terms -> postings -> candidate records -> BM25 scores -> ranked results
-  ```
+Queries are analyzed with the corresponding field's analyzer too. Stemming maps
+inflected forms to a common stem; it is not synonym expansion (`lookup` does not
+automatically become `search`). Lowercasing `MultiLine` makes `multiline`, but does
+not split it into `multi` and `line`. Exact name fields therefore behave differently
+from the tokenized declaration and documentation fields.
 
-- Draw the boundary clearly: TF-IDF and BM25 rank lexical evidence. Text analysis can
-  connect word forms and an entity can combine terms from several fields, but neither
-  method understands intent or meaning like a semantic or vector search system.
+#### Inverted index: retrieve candidates before ranking them
 
-- Stemming
+An **inverted index** maps a field and term to a postings list of record IDs.
+Tokenized text postings also store occurrence counts and positions, supporting
+scoring and phrase queries. A hypothetical example:
+
+```text
+(signature, multiline) -> A: 1 occurrence, B: 1 occurrence
+(doc, search)          -> A: 3 occurrences, C: 2 occurrences
+(code, search)         -> B: 4 occurrences
+```
+
+Let \(P_f(t)\) be the set of records containing analyzed term \(t\) in field \(f\).
+For these two words, an unqualified term can match any default search field:
+
+$$
+P(t) = \bigcup_{f \in F} P_f(t)
+$$
+
+Boolean operators determine eligibility:
+
+$$
+\begin{aligned}
+C(\texttt{multiline AND search}) &= P(\texttt{multiline}) \cap P(\texttt{search})
+                                  = \{A,B\} \\
+C(\texttt{multiline OR search})  &= P(\texttt{multiline}) \cup P(\texttt{search})
+                                  = \{A,B,C\}
+\end{aligned}
+$$
+
+The two required terms can occur in different fields of the same record. `AND`
+does not require the same line, field, or adjacent positions. `srcsearch` leaves
+Tantivy's default operator as `OR`, so `multiline search` is not equivalent to
+`multiline AND search`. Ranking orders the eligible records; a high score cannot
+compensate for a missing required term.
+
+#### From TF-IDF intuition to the actual BM25 formula
+
+First consider one tokenized field. Define:
+
+| Symbol | Meaning |
+| --- | --- |
+| \(d\), \(Q\) | A record and a set of distinct analyzed query terms |
+| \(N\) | Number of indexed records |
+| \(\operatorname{tf}(t,d)\) | Occurrences of term \(t\) in this field of record \(d\) |
+| \(\operatorname{df}(t)\) | Number of records containing \(t\) in this field |
+| \(L_d\), \(\overline L\) | Field length in tokens and average field length |
+
+One simple TF-IDF scoring variant uses raw counts and an unnormalized sum:
+
+$$
+\operatorname{score}_{\mathrm{TF\text{-}IDF}}(d,Q)
+= \sum_{t \in Q} \operatorname{tf}(t,d)
+  \ln\!\left(\frac{N}{\operatorname{df}(t)}\right)
+$$
+
+This illustrates two signals: repeated mentions add evidence, and rare terms carry
+more weight. For \(N=100\), a term in 5 records has IDF \(\ln(20)\approx3.00\),
+while a term in 50 records has IDF \(\ln(2)\approx0.69\). Terms absent from the
+index have no matching postings and contribute nothing. There are other TF-IDF
+variants, including logarithmic TF and cosine normalization; this is an
+introductory scoring model, not the formula `srcsearch` executes.
+
+`srcsearch` uses Tantivy's BM25 term scoring. For a matching term:
+
+$$
+\operatorname{IDF}(t)
+= \ln\!\left(1 + \frac{N-\operatorname{df}(t)+0.5}
+                         {\operatorname{df}(t)+0.5}\right)
+$$
+
+$$
+\operatorname{BM25}(d,Q)
+= \sum_{t \in Q} \operatorname{IDF}(t)\,
+  \frac{\operatorname{tf}(t,d)(k_1+1)}
+       {\operatorname{tf}(t,d)+k_1\!\left(1-b+b\frac{L_d}{\overline L}\right)}
+$$
+
+The pinned Tantivy 0.25.0 uses \(k_1=1.2\) and \(b=0.75\). The logarithm is
+natural; this smoothed IDF stays positive even for terms present in every record.
+
+- **Saturation:** at average field length, the TF factor becomes
+  \(2.2\operatorname{tf}/(\operatorname{tf}+1.2)\). For TF values 1, 3, and 10,
+  it is approximately 1.00, 1.57, and 1.96; its limit is 2.2. Ten repetitions do
+  not provide ten times the evidence. Larger \(k_1\) delays saturation.
+- **Length normalization:** holding TF fixed, a longer field gets a smaller
+  contribution. \(b=0\) disables length normalization; \(b=1\) applies the full
+  field-length ratio inside the denominator. Length means tokens, not source lines.
+
+For a concrete comparison, suppose `multiline` occurs in 5 of 100 records in one
+field, and that field averages 100 tokens:
+
+$$
+\operatorname{IDF}(\texttt{multiline})
+= \ln\!\left(1+\frac{95.5}{5.5}\right) \approx 2.91
+$$
+
+| Record | TF | Field length | TF/length factor | Term score, before boosts |
+| --- | ---: | ---: | ---: | ---: |
+| A: compact entity | 1 | 50 | \(2.2/(1+0.75)=1.257\) | 3.66 |
+| B: long entity | 3 | 200 | \(6.6/(3+2.1)=1.294\) | 3.77 |
+
+Three mentions in the longer entity only slightly outweigh one in the compact
+entity. These are illustrative corpus statistics, not the measured demo scores.
+
+#### Fields: combine several views of the same entity
+
+For the simple Boolean term query above, matching term clauses contribute additive
+scores with field boosts:
+
+$$
+\operatorname{score}(d,Q)
+= \sum_{f\in F} w_f
+  \sum_{t\in Q_f} \operatorname{IDF}_f(t)\,
+  \frac{\operatorname{tf}_f(t,d)(k_1+1)}
+       {\operatorname{tf}_f(t,d)+k_1\!\left(1-b+b\frac{L_{d,f}}{\overline L_f}\right)}
+$$
+
+Here \(Q_f\) contains the terms produced by that field's query analyzer; missing
+matches contribute zero. Each field has its own document frequencies and lengths.
+Tantivy computes \(\overline L_f\) as the field's total token count divided by
+\(N\), including records without that field in the denominator. Thus Markdown
+sections and Rust entities influence the corpus statistics together.
+
+The current boosts, configured in `src/lib.rs`, are:
+
+| Field | Boost \(w_f\) |
+| --- | ---: |
+| `title`, `name`, `qualified_name` | 4 |
+| `signature`, `doc`, `body_text` | 2 |
+| `code` | 1 |
+
+A signature contribution of 3.66 becomes 7.32 after its boost. A `search` match in
+the same record's code contributes an additional score calculated with the code
+field's statistics. A term matching several fields can contribute several times.
+This is a sum of boosted field scores, not BM25F's combination of field evidence
+before saturation. Boosts express a preference, not a guarantee that every name
+match outranks every code match.
+
+For exact score reproduction, account for Tantivy's compressed field lengths and
+floating-point arithmetic. The raw `name` and `qualified_name` fields do not store
+term frequencies; their term scorers use frequency 1. Use `--explain` to inspect
+the actual scoring tree; phrases and other query types need their own explanation
+rather than assuming the simple term-sum formula applies unchanged.
+
+```text
+field-specific query analysis -> postings + Boolean eligibility
+                             -> boosted BM25 contributions -> ranked records
+```
+
+Close with the boundary: these scores measure lexical evidence, not the probability
+that a result answers the question. Stemming connects word forms, and structure
+brings related text together, but neither supplies synonym matching or semantic
+understanding. Scores depend on the query and corpus, so they are not universal
+confidence values or directly comparable across unrelated searches.
+
+Speaker references: the local `build_tantivy_schema`, `register_doc_text_analyzer`,
+and `search_tantivy_index_with_explain` implementation in [src/lib.rs](../src/lib.rs),
+plus Tantivy 0.25.0's
+[BM25 implementation](https://docs.rs/tantivy/0.25.0/src/tantivy/query/bm25.rs.html)
+and [query parser documentation](https://docs.rs/tantivy/0.25.0/tantivy/query/struct.QueryParser.html).
 
 ### 5. How `srcsearch` builds and searches the index (12:00–16:00)
 
