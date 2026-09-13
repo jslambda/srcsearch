@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Section 4 — Search concepts | srcsearch</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #202936; background: #f4f6f8; line-height: 1.7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1060px; margin: 2rem auto; padding: 3rem 4rem; background: #fff; border: 1px solid #dce2e8; border-radius: 12px; }
+    h1, h2 { line-height: 1.25; color: #142e48; text-wrap: balance; }
+    h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin-top: 0; }
+    h2 { margin-top: 2.8rem; padding-top: 1rem; border-top: 1px solid #dce2e8; font-size: 1.5rem; }
+    p, li { overflow-wrap: break-word; }
+    li + li { margin-top: .8rem; }
+    a { color: #075ca8; text-underline-offset: .18em; }
+    a:focus-visible, [tabindex]:focus-visible { outline: 3px solid #075ca8; outline-offset: 4px; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .9em; }
+    code { background: #edf2f6; border-radius: 3px; padding: .12em .3em; }
+    pre { background: #edf2f6; padding: 1.2rem; border-radius: 6px; overflow-x: auto; line-height: 1.6; }
+    pre code { padding: 0; }
+    .table-scroll { overflow-x: auto; margin: 1.5rem 0; }
+    table { border-collapse: collapse; width: 100%; font-size: .94rem; }
+    th, td { text-align: left; vertical-align: top; padding: .75rem; border: 1px solid #dce2e8; }
+    th { background: #eaf0f6; font-weight: 650; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    .math.display { display: block; overflow-x: auto; padding: .8rem; margin: 1.4rem 0; background: #f8fafc; border-radius: 6px; }
+    mjx-container { max-width: 100%; }
+    .render-notice { padding: .8rem 1rem; border: 1px solid #b58720; background: #fff6d9; }
+    @media (max-width: 700px) {
+      main { margin: 0; padding: 1.5rem 1rem; border: 0; border-radius: 0; }
+      th, td { padding: .55rem; }
+    }
+    @media print {
+      :root { background: white; font-size: 10pt; }
+      main { max-width: none; margin: 0; padding: 0; border: 0; }
+      h2 { break-after: avoid; }
+      tr, pre, .math.display { break-inside: avoid; }
+      .table-scroll, .math.display { overflow: visible; }
+    }
+  </style>
+  <!-- MathJax CDN setup: https://docs.mathjax.org/en/stable/web/start.html -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]'], ['$$', '$$']]
+      }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4.0.0/tex-mml-chtml.js"
+    onerror="document.getElementById('math-status').hidden = false"></script>
+</head>
+<body>
+  <main>
+    <!-- Content mirrors section 4 of talk.md; formulas are rendered by MathJax. -->
+    <noscript><p class="render-notice">Enable JavaScript to typeset the formulas. Their TeX notation remains visible below.</p></noscript>
+    <p id="math-status" class="render-notice" hidden>MathJax could not load. Connect to the internet and reload to typeset the formulas.</p>
+<h1 id="search-concepts-in-just-enough-depth-8001200">4. Search concepts
+in just enough depth (8:00–12:00)</h1>
+<p>Use four presentation beats: analysis, candidate retrieval, BM25, and
+field scoring. The equations and numerical examples below also serve as
+speaker notes; show the BM25 formula and one worked comparison during
+the four-minute slot.</p>
+<h2 id="analysis-what-counts-as-a-term">Analysis: what counts as a
+term?</h2>
+<p>An index moves work ahead of query time: parse files into records,
+analyze each searchable field, and store lookup structures. Here a
+<strong>document</strong> means one indexed record (a Rust entity or
+Markdown section), not necessarily a whole file.</p>
+<p>Analysis defines which text can match. <code>srcsearch</code> uses
+these field configurations:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Search concepts table">
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Fields</th>
+<th>Analysis</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>title</code>, <code>body_text</code>, <code>doc</code></td>
+<td>Split into alphanumeric tokens, lowercase, English stemming</td>
+<td><code>Searching searched</code> → <code>search</code>,
+<code>search</code></td>
+</tr>
+<tr>
+<td><code>signature</code>, <code>code</code></td>
+<td>Default text analyzer: split into alphanumeric tokens, remove
+overlong tokens, lowercase; no stemming</td>
+<td><code>MultiLine</code> → <code>multiline</code>;
+<code>searching</code> stays <code>searching</code></td>
+</tr>
+<tr>
+<td><code>name</code>, <code>qualified_name</code></td>
+<td>Raw whole-value indexing; no lowercasing or stemming</td>
+<td><code>MultiLine</code> stays <code>MultiLine</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Queries are analyzed with the corresponding field’s analyzer too.
+Stemming maps inflected forms to a common stem; it is not synonym
+expansion (<code>lookup</code> does not automatically become
+<code>search</code>). Lowercasing <code>MultiLine</code> makes
+<code>multiline</code>, but does not split it into <code>multi</code>
+and <code>line</code>. Exact name fields therefore behave differently
+from the tokenized declaration and documentation fields.</p>
+<h2 id="inverted-index-retrieve-candidates-before-ranking-them">Inverted
+index: retrieve candidates before ranking them</h2>
+<p>An <strong>inverted index</strong> maps a field and term to a
+postings list of record IDs. Tokenized text postings also store
+occurrence counts and positions, supporting scoring and phrase queries.
+A hypothetical example:</p>
+<pre class="text"><code>(signature, multiline) -&gt; A: 1 occurrence, B: 1 occurrence
+(doc, search)          -&gt; A: 3 occurrences, C: 2 occurrences
+(code, search)         -&gt; B: 4 occurrences</code></pre>
+<p>Let <span class="math inline">\(P_f(t)\)</span> be the set of records
+containing analyzed term <span class="math inline">\(t\)</span> in field
+<span class="math inline">\(f\)</span>. For these two words, an
+unqualified term can match any default search field:</p>
+<p><span class="math display">\[
+P(t) = \bigcup_{f \in F} P_f(t)
+\]</span></p>
+<p>Boolean operators determine eligibility:</p>
+<p><span class="math display">\[
+\begin{aligned}
+C(\texttt{multiline AND search}) &amp;= P(\texttt{multiline}) \cap
+P(\texttt{search})
+                                  = \{A,B\} \\
+C(\texttt{multiline OR search})  &amp;= P(\texttt{multiline}) \cup
+P(\texttt{search})
+                                  = \{A,B,C\}
+\end{aligned}
+\]</span></p>
+<p>The two required terms can occur in different fields of the same
+record. <code>AND</code> does not require the same line, field, or
+adjacent positions. <code>srcsearch</code> leaves Tantivy’s default
+operator as <code>OR</code>, so <code>multiline search</code> is not
+equivalent to <code>multiline AND search</code>. Ranking orders the
+eligible records; a high score cannot compensate for a missing required
+term.</p>
+<h2 id="from-tf-idf-intuition-to-the-actual-bm25-formula">From TF-IDF
+intuition to the actual BM25 formula</h2>
+<p>First consider one tokenized field. Define:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Search concepts table">
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="math inline">\(d\)</span>, <span
+class="math inline">\(Q\)</span></td>
+<td>A record and a set of distinct analyzed query terms</td>
+</tr>
+<tr>
+<td><span class="math inline">\(N\)</span></td>
+<td>Number of indexed records</td>
+</tr>
+<tr>
+<td><span class="math inline">\(\operatorname{tf}(t,d)\)</span></td>
+<td>Occurrences of term <span class="math inline">\(t\)</span> in this
+field of record <span class="math inline">\(d\)</span></td>
+</tr>
+<tr>
+<td><span class="math inline">\(\operatorname{df}(t)\)</span></td>
+<td>Number of records containing <span class="math inline">\(t\)</span>
+in this field</td>
+</tr>
+<tr>
+<td><span class="math inline">\(L_d\)</span>, <span
+class="math inline">\(\overline L\)</span></td>
+<td>Field length in tokens and average field length</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>One simple TF-IDF scoring variant uses raw counts and an unnormalized
+sum:</p>
+<p><span class="math display">\[
+\operatorname{score}_{\mathrm{TF\text{-}IDF}}(d,Q)
+= \sum_{t \in Q} \operatorname{tf}(t,d)
+  \ln\!\left(\frac{N}{\operatorname{df}(t)}\right)
+\]</span></p>
+<p>This illustrates two signals: repeated mentions add evidence, and
+rare terms carry more weight. For <span
+class="math inline">\(N=100\)</span>, a term in 5 records has IDF <span
+class="math inline">\(\ln(20)\approx3.00\)</span>, while a term in 50
+records has IDF <span class="math inline">\(\ln(2)\approx0.69\)</span>.
+Terms absent from the index have no matching postings and contribute
+nothing. There are other TF-IDF variants, including logarithmic TF and
+cosine normalization; this is an introductory scoring model, not the
+formula <code>srcsearch</code> executes.</p>
+<p><code>srcsearch</code> uses Tantivy’s BM25 term scoring. For a
+matching term:</p>
+<p><span class="math display">\[
+\operatorname{IDF}(t)
+= \ln\!\left(1 + \frac{N-\operatorname{df}(t)+0.5}
+                         {\operatorname{df}(t)+0.5}\right)
+\]</span></p>
+<p><span class="math display">\[
+\operatorname{BM25}(d,Q)
+= \sum_{t \in Q} \operatorname{IDF}(t)\,
+  \frac{\operatorname{tf}(t,d)(k_1+1)}
+       {\operatorname{tf}(t,d)+k_1\!\left(1-b+b\frac{L_d}{\overline
+L}\right)}
+\]</span></p>
+<p>The pinned Tantivy 0.25.0 uses <span
+class="math inline">\(k_1=1.2\)</span> and <span
+class="math inline">\(b=0.75\)</span>. The logarithm is natural; this
+smoothed IDF stays positive even for terms present in every record.</p>
+<ul>
+<li><strong>Saturation:</strong> at average field length, the TF factor
+becomes <span
+class="math inline">\(2.2\operatorname{tf}/(\operatorname{tf}+1.2)\)</span>.
+For TF values 1, 3, and 10, it is approximately 1.00, 1.57, and 1.96;
+its limit is 2.2. Ten repetitions do not provide ten times the evidence.
+Larger <span class="math inline">\(k_1\)</span> delays saturation.</li>
+<li><strong>Length normalization:</strong> holding TF fixed, a longer
+field gets a smaller contribution. <span
+class="math inline">\(b=0\)</span> disables length normalization; <span
+class="math inline">\(b=1\)</span> applies the full field-length ratio
+inside the denominator. Length means tokens, not source lines.</li>
+</ul>
+<p>For a concrete comparison, suppose <code>multiline</code> occurs in 5
+of 100 records in one field, and that field averages 100 tokens:</p>
+<p><span class="math display">\[
+\operatorname{IDF}(\texttt{multiline})
+= \ln\!\left(1+\frac{95.5}{5.5}\right) \approx 2.91
+\]</span></p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Search concepts table">
+<table>
+<colgroup>
+<col style="width: 15%" />
+<col style="width: 21%" />
+<col style="width: 21%" />
+<col style="width: 21%" />
+<col style="width: 21%" />
+</colgroup>
+<thead>
+<tr>
+<th>Record</th>
+<th style="text-align: right;">TF</th>
+<th style="text-align: right;">Field length</th>
+<th style="text-align: right;">TF/length factor</th>
+<th style="text-align: right;">Term score, before boosts</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A: compact entity</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">50</td>
+<td style="text-align: right;"><span
+class="math inline">\(2.2/(1+0.75)=1.257\)</span></td>
+<td style="text-align: right;">3.66</td>
+</tr>
+<tr>
+<td>B: long entity</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">200</td>
+<td style="text-align: right;"><span
+class="math inline">\(6.6/(3+2.1)=1.294\)</span></td>
+<td style="text-align: right;">3.77</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Three mentions in the longer entity only slightly outweigh one in the
+compact entity. These are illustrative corpus statistics, not the
+measured demo scores.</p>
+<h2 id="fields-combine-several-views-of-the-same-entity">Fields: combine
+several views of the same entity</h2>
+<p>For the simple Boolean term query above, matching term clauses
+contribute additive scores with field boosts:</p>
+<p><span class="math display">\[
+\operatorname{score}(d,Q)
+= \sum_{f\in F} w_f
+  \sum_{t\in Q_f} \operatorname{IDF}_f(t)\,
+  \frac{\operatorname{tf}_f(t,d)(k_1+1)}
+       {\operatorname{tf}_f(t,d)+k_1\!\left(1-b+b\frac{L_{d,f}}{\overline
+L_f}\right)}
+\]</span></p>
+<p>Here <span class="math inline">\(Q_f\)</span> contains the terms
+produced by that field’s query analyzer; missing matches contribute
+zero. Each field has its own document frequencies and lengths. Tantivy
+computes <span class="math inline">\(\overline L_f\)</span> as the
+field’s total token count divided by <span
+class="math inline">\(N\)</span>, including records without that field
+in the denominator. Thus Markdown sections and Rust entities influence
+the corpus statistics together.</p>
+<p>The current boosts, configured in <code>src/lib.rs</code>, are:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Search concepts table">
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th style="text-align: right;">Boost <span
+class="math inline">\(w_f\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>title</code>, <code>name</code>,
+<code>qualified_name</code></td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr>
+<td><code>signature</code>, <code>doc</code>,
+<code>body_text</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>code</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>A signature contribution of 3.66 becomes 7.32 after its boost. A
+<code>search</code> match in the same record’s code contributes an
+additional score calculated with the code field’s statistics. A term
+matching several fields can contribute several times. This is a sum of
+boosted field scores, not BM25F’s combination of field evidence before
+saturation. Boosts express a preference, not a guarantee that every name
+match outranks every code match.</p>
+<p>For exact score reproduction, account for Tantivy’s compressed field
+lengths and floating-point arithmetic. The raw <code>name</code> and
+<code>qualified_name</code> fields do not store term frequencies; their
+term scorers use frequency 1. Use <code>--explain</code> to inspect the
+actual scoring tree; phrases and other query types need their own
+explanation rather than assuming the simple term-sum formula applies
+unchanged.</p>
+<pre class="text"><code>field-specific query analysis -&gt; postings + Boolean eligibility
+                             -&gt; boosted BM25 contributions -&gt; ranked records</code></pre>
+<p>Close with the boundary: these scores measure lexical evidence, not
+the probability that a result answers the question. Stemming connects
+word forms, and structure brings related text together, but neither
+supplies synonym matching or semantic understanding. Scores depend on
+the query and corpus, so they are not universal confidence values or
+directly comparable across unrelated searches.</p>
+<p>Speaker references: the local <code>build_tantivy_schema</code>,
+<code>register_doc_text_analyzer</code>, and
+<code>search_tantivy_index_with_explain</code> implementation in <a
+href="../src/lib.rs">src/lib.rs</a>, plus Tantivy 0.25.0’s <a
+href="https://docs.rs/tantivy/0.25.0/src/tantivy/query/bm25.rs.html">BM25
+implementation</a> and <a
+href="https://docs.rs/tantivy/0.25.0/tantivy/query/struct.QueryParser.html">query
+parser documentation</a>.</p>
+
+  </main>
+</body>
+</html>
+
