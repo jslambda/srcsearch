@@ -55,7 +55,7 @@
 </head>
 <body>
   <main>
-    <!-- Content mirrors section 4 of talk.md; formulas are rendered by MathJax. -->
+    <!-- Based on section 4 of talk.md, with expanded BM25 intuition; formulas are rendered by MathJax. -->
     <noscript><p class="render-notice">Enable JavaScript to typeset the formulas. Their TeX notation remains visible below.</p></noscript>
     <p id="math-status" class="render-notice" hidden>MathJax could not load. Connect to the internet and reload to typeset the formulas.</p>
 <h1 id="search-concepts-in-just-enough-depth-8001200">4. Search concepts
@@ -208,6 +208,20 @@ Terms absent from the index have no matching postings and contribute
 nothing. There are other TF-IDF variants, including logarithmic TF and
 cosine normalization; this is an introductory scoring model, not the
 formula <code>srcsearch</code> executes.</p>
+<h3>What BM25 improves over this TF-IDF model</h3>
+<p>In the raw-count formula above, every extra occurrence earns the same
+amount of credit. A record mentioning <code>search</code> ten times gets
+ten times that term’s contribution, regardless of whether the record has
+20 tokens or 2,000. This can favor large entities and repetitive code even
+when a compact function is a better starting point.</p>
+<p>BM25 keeps the idea that rare terms are more informative, but changes
+how occurrences count: repeated mentions give diminishing returns, and
+the field’s length affects how much evidence a given count provides.
+These are ranking assumptions: repetition can signal relevance, but its
+value is limited; longer text has more opportunities to mention a term
+incidentally. Logarithmic TF and cosine normalization address related
+issues in other TF-IDF variants, so this comparison is specifically with
+the simple formula above. BM25 is not guaranteed to rank every query better.</p>
 <p><code>srcsearch</code> uses Tantivy’s BM25 term scoring. For a
 matching term:</p>
 <p><span class="math display">\[
@@ -232,12 +246,44 @@ becomes <span
 class="math inline">\(2.2\operatorname{tf}/(\operatorname{tf}+1.2)\)</span>.
 For TF values 1, 3, and 10, it is approximately 1.00, 1.57, and 1.96;
 its limit is 2.2. Ten repetitions do not provide ten times the evidence.
-Larger <span class="math inline">\(k_1\)</span> delays saturation.</li>
+Larger <span class="math inline">\(k_1\)</span> delays saturation.
+<p>Think of reading a function’s documentation. The first mention of
+<code>multiline</code> gives you a useful clue. A second or third mention
+strengthens it. By the tenth mention, you have mostly learned that the
+author repeats the word; it supplies less new evidence about whether
+this is the implementation you need. BM25 models that diminishing value,
+without trying to understand the text.</p>
+<p>Holding field length and IDF fixed, moving from one to three mentions
+at average length increases this term’s contribution by about 57%,
+instead of the 200% increase in raw-count TF-IDF. Even arbitrarily many
+mentions approach a finite contribution of
+<span class="math inline">\(2.2\operatorname{IDF}(t)\)</span> before
+boosts. This cap applies to one term in one field, not the total score:
+matching other query terms or fields can still add evidence.</p></li>
 <li><strong>Length normalization:</strong> holding TF fixed, a longer
 field gets a smaller contribution. <span
 class="math inline">\(b=0\)</span> disables length normalization; <span
 class="math inline">\(b=1\)</span> applies the full field-length ratio
-inside the denominator. Length means tokens, not source lines.</li>
+inside the denominator. Length means tokens, not source lines.
+<p>A single mention of <code>multiline</code> in a short declaration is
+more concentrated evidence than a single mention buried in a large
+implementation. Long fields have more chances to contain the word just
+because they contain more text. Normalization adjusts for that opportunity;
+it does not declare that short code is inherently more relevant.</p>
+<p>The ratio <span class="math inline">\(L_d/\overline L\)</span>
+anchors the adjustment to the corpus. At average length the ratio is 1.
+Below average, the denominator shrinks and the same occurrence count
+earns more credit; above average, it grows and earns less. With one
+occurrence and the parameters above, the TF/length factor is about 1.26
+at half the average length, 1.00 at average length, and 0.71 at twice
+the average length. Multiply each by the same IDF to compare term scores.</p>
+<p>The parameter <span class="math inline">\(b\)</span> controls how
+strongly to make this adjustment. Setting it to 0 treats those three
+lengths alike; increasing it makes the distinction stronger. A longer
+field can still win through additional matches, as the example below
+shows. For <code>srcsearch</code>, this comparison happens within each
+field: signature lengths are compared with the average signature length,
+and code lengths with the average code length.</p></li>
 </ul>
 <p>For a concrete comparison, suppose <code>multiline</code> occurs in 5
 of 100 records in one field, and that field averages 100 tokens:</p>
@@ -368,4 +414,3 @@ parser documentation</a>.</p>
   </main>
 </body>
 </html>
-

@@ -157,6 +157,11 @@ term search penalized because of its high frequency in the corpus
 
 ### 4. Search concepts in just enough depth (8:00–12:00)
 
+<!-- AI agents: Keep section 4 of talk/talk.md and talk/section4.html in sync.
+When editing either version, update the other in the same change so that the
+explanations, examples, formulas, and references agree. Preserve each format's
+presentation conventions, including MathJax rendering in the HTML version. -->
+
 Use four presentation beats: analysis, candidate retrieval, BM25, and field scoring.
 The equations and numerical examples below also serve as speaker notes; show the
 BM25 formula and one worked comparison during the four-minute slot.
