@@ -394,6 +394,38 @@ Speaker references: [rust-indexer README](https://github.com/jslambda/rust-index
 [markdown-indexer README](https://github.com/jslambda/markdown-indexer/blob/main/README.md),
 and the field mapping in [src/lib.rs](../src/lib.rs).
 
+#### From a query string to ranked records
+
+`search_tantivy_index_with_explain` passes the query string to Tantivy's
+`QueryParser`. The selected scope sets the default fields for unqualified terms:
+
+| Scope | Default search fields |
+| --- | --- |
+| `all` | `title`, `body_text`, `name`, `signature`, `doc`, `code` |
+| `doc` | `title`, `body_text`, `doc` |
+
+For the demo query `multiline AND search`, think of the parsed query as:
+
+```text
+    (multiline in ANY default field)
+AND (search    in ANY default field)
+                  ↓
+       Records satisfying both clauses
+                  ↓
+       Sum boosted BM25 contributions
+                  ↓
+       TopDocs: highest-scoring N records
+```
+
+- Assigns boosts: **4×** for `title`, `name`, and
+  `qualified_name`; **2×** for `signature`, `doc`, and `body_text`; **1×** for
+  `code`. These affect ranking after the Boolean requirements are met.
+
+Presenter cue: “First decide which records qualify; then rank them by the evidence
+in their fields.”
+
+Speaker reference: `search_tantivy_index_with_explain` in [src/lib.rs](../src/lib.rs).
+
 ### 6. Demo: exploring the `ripgrep` repository (16:00–22:00)
 
 #### Demo A: where is multiline searching implemented? (16:00–19:00)
