@@ -15,11 +15,11 @@ then use line-oriented search for precise and exhaustive inspection.
 
 By the end of the talk, the audience should understand:
 
-- why the choice of searchable unit changes the results a search tool can return;
-- the roles of indexing, fields, BM25, and relevance ranking;
+- why the choice of searchable unit changes the results a search tool can return; (OK)
+- the roles of indexing, fields, BM25, and relevance ranking; (wip)
 - how `srcsearch` turns Rust entities and Markdown sections into searchable records;
 - when to choose `srcsearch`, `ripgrep`, or a combination of both;
-- why lexical ranking is useful for coding agents, but is not semantic understanding.-->
+- why srcsearch is useful for coding agents? -->
 
 ## Outline
 
@@ -124,7 +124,7 @@ AND
 
 term search penalized because of its high frequency in the corpus
 -->
-### 2. `ripgrep` solves a different problem well (2:00–5:00)
+<!--### 2. `ripgrep` solves a different problem well (2:00–5:00)
 
 - Establish `ripgrep` as the baseline rather than the opponent.
 - Show where line-oriented search excels:
@@ -137,7 +137,7 @@ term search penalized because of its high frequency in the corpus
   - a broad expression can return many lines that the user must group and prioritize;
   - relevant words can appear in different parts of the same code entity without
     appearing together on one line.
-- Transition: this is a retrieval and ranking problem, not a failure of grep.
+- Transition: this is a retrieval and ranking problem, not a failure of grep.-->
 
 ### 3. Change the unit being searched (5:00–8:00)
 
@@ -357,11 +357,42 @@ and [query parser documentation](https://docs.rs/tantivy/0.25.0/tantivy/query/st
   4. store their content and metadata as fielded records in Tantivy;
   5. analyze the query and rank matching records with BM25;
   6. return a small set of results with file and source locations.
-- Show one representative Rust record and one Markdown record.
 - Explain why source locations remain important: ranked retrieval should lead back to
   the real code or documentation immediately.
 - Briefly mention document-scoped search as a way to exclude code and signatures when
   the user is looking for explanations rather than implementations.
+
+#### From files to searchable documents
+
+One file can produce many records. The parsers choose the boundaries; `srcsearch`
+maps the extracted content into Tantivy documents for analysis and ranking.
+
+```mermaid
+flowchart LR
+    R["Rust source"] --> P["syn: parse Rust items"]
+    P --> E["Entity records<br/>name · signature · docs · location"]
+    M["Markdown files"] --> H["Parse heading sections"]
+    H --> S["Section records<br/>heading · paragraphs · code blocks · location"]
+    E --> T["srcsearch<br/>map fields into Tantivy documents"]
+    S --> T
+    T --> I["Analyze fields → searchable index"]
+```
+
+- **Rust:** `rust2json` extracts functions, structs, enums, traits, modules, and
+  impl blocks. Each record carries its kind, name, signature, doc comments, file,
+  and line range. `srcsearch` also uses that range to copy the entity's source
+  into the searchable `code` field.
+- **Markdown:** `markdown2json` groups content into heading sections, separating
+  paragraphs from code blocks and retaining source locations. `srcsearch` maps
+  the heading to `title` and joins the paragraphs into `body_text`; extracted
+  Markdown code blocks are not currently added to its searchable fields.
+
+Presenter cue: “A function becomes a document; a documentation section becomes
+another. Both carry an address back to the original file.”
+
+Speaker references: [rust-indexer README](https://github.com/jslambda/rust-indexer/blob/main/README.md),
+[markdown-indexer README](https://github.com/jslambda/markdown-indexer/blob/main/README.md),
+and the field mapping in [src/lib.rs](../src/lib.rs).
 
 ### 6. Demo: exploring the `ripgrep` repository (16:00–22:00)
 
