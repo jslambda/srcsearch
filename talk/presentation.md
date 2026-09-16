@@ -307,8 +307,8 @@ The default operator is `OR`, so write `AND` when both clues are required.
 $$
 \operatorname{score}(d,Q)
 = \sum_{t \in Q}
-\underbrace{\operatorname{tf}(t,d)}_{\text{mentions}}
-\underbrace{\ln\!\left(\frac{N}{\operatorname{df}(t)}\right)}_{\text{rarity}}
+\underbrace{\operatorname{tf}(t,d)}\_{\text{mentions}}
+\underbrace{\ln\\!\left(\frac{N}{\operatorname{df}(t)}\right)}\_{\text{rarity}}
 $$
 
 1. More mentions add evidence.
