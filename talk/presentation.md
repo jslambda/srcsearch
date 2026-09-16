@@ -7,7 +7,7 @@ Hamid Alavi Toussi
 
 ---
 
-<!-- _class: lead -->
+<!-- .slide: class="lead" -->
 
 # 1. Introduction / opening
 
@@ -50,7 +50,7 @@ The tools are complementary: **discover, then inspect**.
 
 ---
 
-<!-- _class: lead -->
+<!-- .slide: class="lead" -->
 
 # 2. A motivating example
 
@@ -138,7 +138,7 @@ No single matching line has to contain the whole clue.
 
 ---
 
-<!-- _class: lead -->
+<!-- .slide: class="lead" -->
 
 # 3. How `srcsearch` works
 
@@ -234,7 +234,7 @@ At query time: analyze the query, retrieve candidates, rank them, return the top
 
 ---
 
-<!-- _class: lead -->
+<!-- .slide: class="lead" -->
 
 # 4. Search and indexing concepts
 
@@ -413,7 +413,7 @@ Use document scope when the question asks for an explanation rather than an impl
 
 ---
 
-<!-- _class: lead -->
+<!-- .slide: class="lead" -->
 
 # 5. `srcsearch` for coding agents
 
@@ -497,7 +497,7 @@ Better source search can begin with a more meaningful unit to search.
 
 ---
 
-<!-- _class: lead -->
+<!-- .slide: class="lead" -->
 
 # A line tells you where words meet.
 
