@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Beyond grep — srcsearch</title>
+    <link rel="icon" href="data:,">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@6.0.1/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@6.0.1/dist/theme/white.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@6.0.1/dist/plugin/highlight/monokai.css">
+
+    <style>
+      :root {
+        --r-background-color: #f5f7fb;
+        --r-main-color: #263449;
+        --r-heading-color: #12223a;
+        --r-link-color: #1769aa;
+        --r-link-color-hover: #0d4776;
+        --r-selection-background-color: #f5c451;
+        --r-heading-font: Inter, ui-sans-serif, system-ui, sans-serif;
+        --r-main-font: Inter, ui-sans-serif, system-ui, sans-serif;
+        --r-code-font: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+
+      .reveal {
+        font-size: 34px;
+      }
+
+      .reveal::before {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background:
+          radial-gradient(circle at 12% 12%, rgb(23 105 170 / 10%), transparent 30%),
+          radial-gradient(circle at 88% 88%, rgb(245 196 81 / 13%), transparent 28%);
+        content: "";
+      }
+
+      .reveal .slides section {
+        text-align: left;
+      }
+
+      .reveal .slides section:first-child,
+      .reveal .slides section.lead {
+        text-align: center;
+      }
+
+      .reveal h1,
+      .reveal h2,
+      .reveal h3 {
+        text-transform: none;
+        letter-spacing: -0.035em;
+      }
+
+      .reveal h1 {
+        font-size: 1.75em;
+      }
+
+      .reveal h2 {
+        font-size: 1.15em;
+        color: #40536d;
+      }
+
+      .reveal p,
+      .reveal li {
+        line-height: 1.38;
+      }
+
+      .reveal blockquote {
+        width: auto;
+        margin-inline: 0;
+        padding: 0.45em 0.75em;
+        border-left: 0.18em solid #f5c451;
+        background: rgb(255 255 255 / 72%);
+        box-shadow: none;
+      }
+
+      .reveal code {
+        border-radius: 0.18em;
+      }
+
+      .reveal :not(pre) > code {
+        padding: 0.08em 0.25em;
+        background: #e8edf4;
+        color: #132743;
+      }
+
+      .reveal pre {
+        width: 100%;
+        margin-inline: 0;
+        font-size: 0.48em;
+        line-height: 1.35;
+        box-shadow: 0 0.18em 0.65em rgb(18 34 58 / 14%);
+      }
+
+      .reveal pre code {
+        max-height: 28em;
+        padding: 1em;
+      }
+
+      .reveal table {
+        width: 100%;
+        font-size: 0.68em;
+      }
+
+      .reveal th,
+      .reveal td {
+        padding: 0.38em 0.55em;
+        border-color: #cbd5e1;
+      }
+
+      .reveal th {
+        background: #dfe9f4;
+        color: #12223a;
+      }
+
+      .reveal tbody tr:nth-child(even) {
+        background: rgb(223 233 244 / 42%);
+      }
+
+      .reveal .progress {
+        color: #1769aa;
+      }
+
+      .load-error {
+        position: fixed;
+        inset: 50% auto auto 50%;
+        width: min(38rem, calc(100% - 3rem));
+        padding: 1.25rem 1.5rem;
+        transform: translate(-50%, -50%);
+        border: 1px solid #d59b19;
+        border-radius: 0.5rem;
+        background: #fff8e6;
+        color: #34280e;
+        font: 1rem/1.5 system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <section
+          data-markdown="presentation.md"
+          data-separator="^\s*---\s*$"
+          data-separator-notes="^Note:"
+          data-charset="utf-8"
+        ></section>
+      </div>
+    </div>
+
+    <noscript>
+      <p class="load-error">JavaScript is required to display this presentation.</p>
+    </noscript>
+
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@6.0.1/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@6.0.1/dist/plugin/markdown.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@6.0.1/dist/plugin/highlight.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@6.0.1/dist/plugin/notes.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@6.0.1/dist/plugin/math.js"></script>
+    <script>
+      const showLoadError = (error) => {
+        const message = document.createElement("p");
+        message.className = "load-error";
+        message.textContent =
+          "The presentation could not load. Start talk/build.sh and open the shown http:// address. " +
+          String(error);
+        document.body.append(message);
+      };
+
+      window.addEventListener("unhandledrejection", (event) => {
+        showLoadError(event.reason);
+      });
+
+      Reveal.initialize({
+        width: 1440,
+        height: 900,
+        margin: 0.06,
+        hash: true,
+        slideNumber: "c/t",
+        transition: "fade",
+        backgroundTransition: "fade",
+        pdfSeparateFragments: false,
+        mathjax4: {
+          mathjax: "https://cdn.jsdelivr.net/npm/mathjax@4.0.0/tex-mml-chtml.js"
+        },
+        plugins: [RevealMarkdown, RevealHighlight, RevealNotes, RevealMath.MathJax4]
+      }).catch(showLoadError);
+    </script>
+  </body>
+</html>
