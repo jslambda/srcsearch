@@ -62,17 +62,25 @@ The tools are complementary: **discover, then inspect**.
 
 ```console
 $ rg --vimgrep 'multiline.*search'
-tests/multiline.rs:20:25:// Tests that even in a multiline search, ...
-tests/multiline.rs:91:15:// Tests that multiline search works ...
-CHANGELOG.md:524:58:  Fix bug where ... multiline search.
-README.md:220:1:multiline search and opt-in fancy regex support ...
-FAQ.md:519:24:slower when performing multiline searches? ...
-crates/core/flags/defs.rs:4541:38:... multiline search is enabled.
+README.md:220:1:multiline search and opt-in fancy regex support via PCRE2.
+CHANGELOG.md:524:58:  Fix bug where `\A` could produce unanchored matches in multiline search.
+FAQ.md:519:24:slower when performing multiline searches? Well, that's because there are
+FAQ.md:654:40:for line-by-line searching by enabling multiline search. After all, our
+FAQ.md:682:58:valid UTF-8 to PCRE2. Unfortunately, one key downside of multiline search is
+tests/multiline.rs:20:25:// Tests that even in a multiline search, a '.' does not match a newline.
+tests/multiline.rs:91:15:// Tests that multiline search works when reading from stdin. This is an
+tests/multiline.rs:92:27:// important test because multiline search must read the entire contents of
+tests/multiline.rs:103:14:// Test that multiline search and contextual matches work.
+tests/tests.rs:22:24:// Tests for ripgrep's multiline search support.
+crates/core/flags/defs.rs:4541:38:default. This flag only applies when multiline search is enabled.
+crates/core/flags/defs.rs:4610:29:match line terminators when multiline searching is enabled. This flag has no
+crates/core/flags/defs.rs:4611:11:effect if multiline searching isn't enabled with the \flag{multiline} flag.
 ```
 
 13 matching lines across 6 files in the pinned repository.
 
 Every match is correct. Which one is the implementation?
+<!--note: the tests results are generic and does not point to the specific implementation of multisearch-->
 
 ---
 
@@ -183,13 +191,10 @@ SearchRecord::MarkdownSection
 
 title           Recursive search
 body_text       paragraphs in this section
-code blocks     extracted by the parser
 file + lines    README.md:...
 ```
 
-`srcsearch` indexes the heading as `title` and paragraphs as `body_text`.
-
-Markdown code blocks are retained by the parser but are not currently searchable.
+<!--`srcsearch` indexes the heading as `title` and paragraphs as `body_text`.-->
 
 ---
 
@@ -198,15 +203,20 @@ Markdown code blocks are retained by the parser but are not currently searchable
 ```text
 SearchRecord
     │
-    ├── identity: kind · name · qualified_name
-    ├── content:  title · body_text · signature · doc · code
-    └── address:  file · start line · end line
+    ▼
+Tantivy document
+    │
+    ├── content:   title · name · qualified_name · signature
+    │              body_text · doc · code
+    ├── metadata:  record_type · file_path · kind
+    └── locations: line_start · line_end · heading_line
     │
     ▼
 Tantivy document ──analyze fields──► inverted index
 ```
 
-The address always leads back to the original source.
+All 13 schema fields are indexed and stored. Default searches use the content
+fields; metadata and locations identify the result and lead back to its source.
 
 ---
 
