@@ -206,17 +206,15 @@ SearchRecord
     ▼
 Tantivy document
     │
-    ├── content:   title · name · qualified_name · signature
+    ├── content:   title · name · signature
     │              body_text · doc · code
+    |               (used in search)
     ├── metadata:  record_type · file_path · kind
-    └── locations: line_start · line_end · heading_line
+    └── locations: line_start · line_end (used for presenting a result) 
     │
     ▼
 Tantivy document ──analyze fields──► inverted index
 ```
-
-All 13 schema fields are indexed and stored. Default searches use the content
-fields; metadata and locations identify the result and lead back to its source.
 
 ---
 
@@ -252,7 +250,7 @@ At query time: analyze the query, retrieve candidates, rank them, return the top
 | `signature`, `code` | tokenize, lowercase | `MultiLine` → `multiline` |
 | `name`, `qualified_name` | exact whole value | `MultiLine` stays `MultiLine` |
 
-The same analyzer is applied to the query for each field.
+The same analyzer is applied to the query for each field (at search time).
 
 Stemming connects word forms. It does not add synonyms: `lookup` does not become `search`.
 
