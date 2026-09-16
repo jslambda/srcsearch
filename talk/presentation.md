@@ -1,11 +1,3 @@
----
-marp: true
-theme: default
-paginate: true
-math: mathjax
-title: "Beyond grep: structure-aware search for Rust code with srcsearch"
-author: Hamid Alavi Toussi
----
 
 # Beyond grep
 
