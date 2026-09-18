@@ -205,15 +205,19 @@ SearchRecord
     ▼
 Tantivy document
     │
-    ├── content:   title · name · signature
-    │              body_text · doc · code
-    |               (used in search)
-    ├── metadata:  record_type · file_path · kind
-    └── locations: line_start · line_end (used for presenting a result) 
+    ├── searchable:     title · name · qualified_name · signature
+    │                   body_text · doc · code
+    └── identification: record_type · file_path · kind
+                        line_start · line_end  
+                        (used to identify and present a result)
     │
     ▼
 Tantivy document ──analyze fields──► inverted index
 ```
+
+<!-- Implementation TODO: Make fields used only to identify or present results
+stored-only instead of indexed. Keep file_path indexed because incremental updates
+delete documents by path; searchable fields must also remain indexed. -->
 
 ---
 
