@@ -280,8 +280,9 @@ the stored frequencies and positions also support ranking and phrase queries.-->
 
 ---
 
-# Boolean queries become set operations
+# Back to our search example!
 
+Let $C(q)$ be the set of eligible records for query $q$.
 Let $P(t)$ be the set of records containing term $t$ in any searched field.
 
 For our query:
@@ -292,7 +293,31 @@ C(\texttt{multiline AND search})
 = \{A,B\}
 $$
 
-The terms may occur in different fields of the same record.
+The eligible records are ranked by using BM25 algorithm.
+
+<!--```python
+def rank(record):
+    score = 0.0
+
+    for (field, term), frequencies in postings.items():
+        if term not in query_terms or record not in frequencies:
+            continue
+
+        score += field_boosts[field] * bm25(
+            tf=frequencies[record],
+            document_frequency=len(frequencies),
+        )
+
+    return score
+
+
+ranking = sorted(
+    ((record, rank(record)) for record in candidates),
+    key=lambda item: item[1],
+    reverse=True,
+)
+
+```-->
 
 ---
 
