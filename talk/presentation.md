@@ -263,13 +263,20 @@ Stemming connects word forms. It does not add synonyms: `lookup` does not become
 
 # The inverted index
 
-Instead of scanning every record, map each **field + term** to its records:
+Without an index, every query would have to read and analyze every record.
+An inverted index does that work once, when the project is indexed, and maps each
+**field + term** to a list of matching records:
 
 ```text
 (signature, multiline) ──► A:1, B:1
 (doc,       search)    ──► A:3, C:2
 (code,      search)    ──► B:4
 ```
+
+At search time, Tantivy looks up only the query terms and combines their short
+postings lists. 
+<!--It can find candidate records without scanning unrelated content;
+the stored frequencies and positions also support ranking and phrase queries.-->
 
 For our query:
 
