@@ -344,10 +344,14 @@ ranked results
 # TF-IDF: two useful intuitions
 
 $$
+\operatorname{idf}(t)
+= \ln\!\left(\frac{N}{\operatorname{df}(t)}\right)
+$$
+
+$$
 \operatorname{score}(d,Q)
 = \sum_{t \in Q}
-\underbrace{\operatorname{tf}(t,d)}\_{\text{mentions}}
-\underbrace{\ln\\!\left(\frac{N}{\operatorname{df}(t)}\right)}\_{\text{rarity}}
+\operatorname{tf}(t,d) \cdot \operatorname{idf}(t)
 $$
 
 1. More mentions add evidence.
