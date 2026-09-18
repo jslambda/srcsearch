@@ -278,6 +278,12 @@ postings lists.
 <!--It can find candidate records without scanning unrelated content;
 the stored frequencies and positions also support ranking and phrase queries.-->
 
+---
+
+# Boolean queries become set operations
+
+Let $P(t)$ be the set of records containing term $t$ in any searched field.
+
 For our query:
 
 $$
