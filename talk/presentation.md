@@ -241,7 +241,9 @@ At query time: analyze the query, retrieve candidates, rank them, return the top
 
 # 4. Search and indexing concepts
 
-## Inverted index → TF-IDF intuition → BM25
+ - Analysis (text pre-processing)
+ - Inverted index 
+ - TF-IDF (BM25)
 
 ---
 
