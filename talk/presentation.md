@@ -327,21 +327,17 @@ ranking = sorted(
 analyzed query
       │
       ▼
-postings lists + Boolean operators
+Boolean operators
       │
       ▼
 eligible records
       │
       ▼
-boosted BM25 contributions
+BM25 ranking
       │
       ▼
 ranked results
 ```
-
-`AND` decides eligibility. A high score cannot replace a missing required term.
-
-The default operator is `OR`, so write `AND` when both clues are required.
 
 ---
 
