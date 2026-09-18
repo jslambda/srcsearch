@@ -174,7 +174,6 @@ kind            impl
 name            Multiline
 signature       impl Flag for Multiline
 documentation   ...
-code            complete source for the entity
 file + lines    crates/core/flags/defs.rs:4503–...
 ```
 
