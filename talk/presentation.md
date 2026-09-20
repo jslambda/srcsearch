@@ -395,7 +395,7 @@ such as its signature, documentation, or code.
 
 $$
 \operatorname{IDF}(t)
-= \ln\!\left(\frac{N}{\operatorname{df}(t)}\right)
+= \ln\\left(\frac{N}{\operatorname{df}(t)}\right)
 $$
 
 - $N$: total number of documents
@@ -410,12 +410,16 @@ $$
 1. More mentions add evidence.
 2. Rare terms carry more information.
 
+---
+
+# IDF: Example
+
 For 100 documents:
 
 | Documents containing term | IDF |
 | ---: | ---: |
-| 5 | $\ln(20) \approx 3.00$ |
-| 50 | $\ln(2) \approx 0.69$ |
+| 5 | $\ln(100/5) \approx 3.00$ |
+| 50 | $\ln(100/50) \approx 0.69$ |
 
 ---
 
