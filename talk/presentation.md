@@ -268,7 +268,38 @@ At query time: analyze the query, retrieve candidates, rank them, return the top
 | --- | --- | --- |
 | `title`, `body_text`, `doc` | tokenize, lowercase, English stem | `Searching searched` → `search`, `search` |
 | `signature`, `code` | tokenize, lowercase | `MultiLine` → `multiline` |
-| `name`, `qualified_name` | exact whole value | `MultiLine` stays `MultiLine` |
+<!--| `name`, `qualified_name` | exact whole value | `MultiLine` stays `MultiLine` 
+it seems we do have tokenization for name.
+
+srcsearch search -i .srcsearch --query '"Flag for Multiline"' --limit 1 --explain | grep -e context -C 5 --color
+                  "description": "avgdl, average length of field"
+                }
+              ]
+            }
+          ],
+          "context": [
+            "Term=Term(field=name, type=Str, \"Flag for Multiline\")"
+          ]
+        }
+      ]
+    },
+
+srcsearch search -i .srcsearch --query 'Flag  Multiline' --limit 1 --explain | grep -e context -C 5 --color
+                  "description": "avgdl, average length of field"
+                }
+              ]
+            }
+          ],
+          "context": [
+            "Term=Term(field=name, type=Str, \"Multiline\")"
+          ]
+        }
+      ]
+    },
+
+TODO impl: fine tune name analysis
+--
+|-->
 
 The same analyzer is applied to the query for each field (at search time).
 
@@ -364,8 +395,8 @@ $$
 = \ln\!\left(\frac{N}{\operatorname{df}(t)}\right)
 $$
 
-- $N$: total number of records
-- $\operatorname{df}(t)$: number of records containing term $t$ (document frequency)
+- $N$: total number of documents 
+- $\operatorname{df}(t)$: number of documents containing term $t$ 
 
 $$
 \operatorname{score}(d,Q)
@@ -383,26 +414,35 @@ For 100 records:
 | 5 | $\ln(20) \approx 3.00$ |
 | 50 | $\ln(2) \approx 0.69$ |
 
+Note: For every term $t$, we define matching documents as field $f$ of record $r$ such that $r[d]$ contains $t$
 
 ---
 
-# BM25: TF-IDF with normalized term frequency
+# BM25: A more normalized TF-IDF
+
+<!--For each field, Tantivy uses a smoothed IDF (boost rare terms even more):-->
+
+$$
+\operatorname{IDF}_{\mathrm{BM25}}(t)
+= \ln\!\left(1+\frac{N-\operatorname{df}(t)+0.5}
+{\operatorname{df}(t)+0.5}\right)
+$$
 
 $$
 \operatorname{BM25}(d,Q)
-= \sum_{t \in Q}\operatorname{IDF}(t)
+= \sum_{t \in Q}\operatorname{IDF}_{\mathrm{BM25}}(t)
 \frac{\operatorname{tf}(t,d)(k_1+1)}
 {\operatorname{tf}(t,d)+k_1\left(1-b+b\frac{L_d}{\overline L}\right)}
 $$
 
-- $L_d$: length of record $d$
-- $\overline L$: average record length
+- $L_d$: length of the matching field in record $d$
+- $\overline L$: average length of that field
 
 BM25 adds two practical ideas:
 
 - **term-frequency saturation:** the tenth mention adds less than the first 
        <!--(tf in denominator)-->
-- **length normalization:** one hit in a focused record is stronger evidence than one hit in a very long record
+- **length normalization:** a match in a short field is stronger evidence than a match in a very long field
 
 `srcsearch` uses Tantivy's $k_1=1.2$ and $b=0.75$.
 
@@ -453,7 +493,7 @@ Why does `Flag for Multiline` rank first?
 
 - the complete entity satisfies both Boolean clauses
 - `multiline` appears in its signature
-- `search` appears in its code and documentation
+- `search` appears in its code
 - the rare, focused signature match dominates the score
 
 In the example query `multiline AND search`, the term `multiline` tells us more than the common term `search`.
