@@ -44,7 +44,7 @@ The biggest difference is the **unit being searched**.
 | `ripgrep` | `srcsearch` |
 | --- | --- |
 | line | Rust entity or Markdown section |
-| exact text / regular expression | analyzedn (processed) query |
+| exact text / regular expression | analyzed (processed) query |
 | exhaustive matches | ranked starting points |
 | no index | prebuilt index |
 
@@ -73,18 +73,12 @@ FAQ.md:682:58:valid UTF-8 to PCRE2. Unfortunately, one key downside of multiline
 tests/multiline.rs:20:25:// Tests that even in a multiline search, a '.' does not match a newline.
 tests/multiline.rs:91:15:// Tests that multiline search works when reading from stdin. This is an
 tests/multiline.rs:92:27:// important test because multiline search must read the entire contents of
-tests/multiline.rs:103:14:// Test that multiline search and contextual matches work.
-tests/tests.rs:22:24:// Tests for ripgrep's multiline search support.
-crates/core/flags/defs.rs:4541:38:default. This flag only applies when multiline search is enabled.
-crates/core/flags/defs.rs:4610:29:match line terminators when multiline searching is enabled. This flag has no
-crates/core/flags/defs.rs:4611:11:effect if multiline searching isn't enabled with the \flag{multiline} flag.
+...
 ```
 
 13 matching lines across 6 files in the pinned repository.
 
-Every match is correct. Which one is the implementation?
 <!--note: the tests results are generic and does not point to the specific implementation of multisearch-->
-
 
 ---
 
@@ -132,8 +126,13 @@ impl Flag for Multiline {
 }
 ```
 
+---
+
+# The record collects evidence from different fields.
+
 `multiline` and `search` belong to one entity, but need not occur on one line.
-# Why the first result ranks
+
+## Why the first result ranks
 
 ```text
 crates/core/flags/defs.rs:4503:1
@@ -144,9 +143,8 @@ search      code            1.734          9.3%
 multiline   signature      16.862         90.7%
 ```
 
-The record collects evidence from different fields.
 
-No single matching line has to contain the whole clue.
+<!--No single matching line has to contain the whole clue.-->
 
 ---
 
@@ -168,10 +166,15 @@ Rust source ──parse items──────► functions, structs, enums,
 
 Markdown ────parse headings────► one section per heading
 
-                    records ───► Tantivy index
 ```
 
-Parsing supplies structure that plain text does not contain.
+Every record is converted to a Tantivy document:
+
+```text
+Tantivy documents ───► Tantivy index
+```
+
+<!--Parsing supplies structure that plain text does not contain.-->
 
 ---
 
@@ -253,7 +256,7 @@ At query time: analyze the query, retrieve candidates, rank them, return the top
 
 # 4. Search and indexing concepts
 
- - Analysis (text pre-processing)
+ - Analysis (text processing)
  - Inverted index 
  - TF-IDF (BM25)
 
