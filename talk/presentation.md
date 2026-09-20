@@ -64,6 +64,7 @@ The tools are complementary: **discover, then inspect**.
 
 ```console
 $ rg --vimgrep 'multiline.*search'
+
 README.md:220:1:multiline search and opt-in fancy regex support via PCRE2.
 CHANGELOG.md:524:58:  Fix bug where `\A` could produce unanchored matches in multiline search.
 FAQ.md:519:24:slower when performing multiline searches? Well, that's because there are
@@ -84,27 +85,6 @@ crates/core/flags/defs.rs:4611:11:effect if multiline searching isn't enabled wi
 Every match is correct. Which one is the implementation?
 <!--note: the tests results are generic and does not point to the specific implementation of multisearch-->
 
----
-
-# The clue may span many lines
-
-```rust
-impl Flag for Multiline {
-    fn name_long(&self) -> &'static str {
-        "multiline"
-    }
-
-    fn doc_category(&self) -> Category {
-        Category::Search
-    }
-
-    fn doc_short(&self) -> &'static str {
-        r"Enable searching across multiple lines."
-    }
-}
-```
-
-`multiline` and `search` belong to one entity, but need not occur on one line.
 
 ---
 
@@ -134,6 +114,25 @@ The result gives us useful identifiers and locations for the next search.
 
 ---
 
+# The clue may span many lines
+
+```rust
+impl Flag for Multiline {
+    fn name_long(&self) -> &'static str {
+        "multiline"
+    }
+
+    fn doc_category(&self) -> Category {
+        Category::Search
+    }
+
+    fn doc_short(&self) -> &'static str {
+        r"Enable searching across multiple lines."
+    }
+}
+```
+
+`multiline` and `search` belong to one entity, but need not occur on one line.
 # Why the first result ranks
 
 ```text
