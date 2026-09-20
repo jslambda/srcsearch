@@ -396,6 +396,9 @@ $$
 {\operatorname{tf}(t,d)+k_1\left(1-b+b\frac{L_d}{\overline L}\right)}
 $$
 
+- $L_d$: length of record $d$
+- $\overline L$: average record length
+
 BM25 adds two practical ideas:
 
 - **term-frequency saturation:** the tenth mention adds less than the first 
@@ -406,7 +409,7 @@ BM25 adds two practical ideas:
 
 ---
 
-# One worked comparison
+<!--# One worked comparison
 
 Suppose `multiline` appears in 5 of 100 records and the average field is 100 tokens.
 
@@ -421,7 +424,7 @@ $$
 | B: long entity | 3 | 200 | 3.77 |
 
 Three mentions in a long entity only slightly outweigh one in a compact entity.
-
+-->
 ---
 
 # Fields express what matters
@@ -441,7 +444,7 @@ search in code          ──► common + long field + 1× boost
                            combined score for the entity
 ```
 
-Each field has its own term and length statistics.
+<!--Each field has its own term and length statistics.-->
 
 ---
 
@@ -449,12 +452,12 @@ Each field has its own term and length statistics.
 
 Why does `Flag for Multiline` rank first?
 
+- the complete entity satisfies both Boolean clauses
 - `multiline` appears in its signature
 - `search` appears in its code and documentation
 - the rare, focused signature match dominates the score
-- the complete entity satisfies both Boolean clauses
 
-BM25 ranks **lexical evidence**. It does not measure whether the result truly answers the question.
+<!--BM25 ranks **lexical evidence**. It does not measure whether the result truly answers the question.-->
 
 ---
 
