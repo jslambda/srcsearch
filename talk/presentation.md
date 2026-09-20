@@ -5,6 +5,8 @@
 
 Hamid Alavi Toussi
 
+Github: [jslambda](https://github.com/jslambda)
+
 ---
 
 <!-- .slide: class="lead" -->
@@ -13,7 +15,7 @@ Hamid Alavi Toussi
 
 ## Where is multiline searching implemented?
 
-You have just joined the `ripgrep` project.
+You'd like to work on multiline search in `ripgrep` project.
 
 You do not know:
 
@@ -42,7 +44,7 @@ The biggest difference is the **unit being searched**.
 | `ripgrep` | `srcsearch` |
 | --- | --- |
 | line | Rust entity or Markdown section |
-| exact text / regular expression | analyzed query |
+| exact text / regular expression | analyzedn (processed) query |
 | exhaustive matches | ranked starting points |
 | no index | prebuilt index |
 
@@ -112,6 +114,17 @@ impl Flag for Multiline {
 $ srcsearch search \
     --index-dir .srcsearch \
     --query 'multiline AND search'
+
+crates/core/flags/defs.rs:4503:1: Flag for Multiline
+crates/searcher/src/searcher/glue.rs:149:1: MultiLine < 's , M , S >
+README.md:211:1: Feature comparison
+crates/searcher/src/searcher/mod.rs:627:1: Searcher
+crates/core/flags/defs.rs:4591:1: Flag for MultilineDotall
+crates/regex/src/literal.rs:11:1: InnerLiterals
+crates/core/flags/defs.rs:6949:1: Flag for StopOnNonmatch
+crates/core/flags/defs.rs:4251:1: Flag for MaxCount
+crates/core/flags/defs.rs:1326:1: Flag for Count
+crates/core/flags/hiargs.rs:26:1: HiArgs
 ```
 
 The first result is `Flag for Multiline`; other high-ranking entities include
