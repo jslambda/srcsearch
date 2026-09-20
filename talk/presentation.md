@@ -404,15 +404,15 @@ $$
 $$
 \operatorname{score}(d,Q)
 = \sum_{t \in Q}
-\operatorname{tf}(t,d) \cdot \operatorname{idf}(t)
+\operatorname{tf}(t,d) \cdot \operatorname{IDF}(t)
 $$
 
 1. More mentions add evidence.
 2. Rare terms carry more information.
 
-For 100 records:
+For 100 documents:
 
-| Records containing term | IDF |
+| Documents containing term | IDF |
 | ---: | ---: |
 | 5 | $\ln(20) \approx 3.00$ |
 | 50 | $\ln(2) \approx 0.69$ |
@@ -443,7 +443,7 @@ BM25 adds two practical ideas:
 
 - **term-frequency saturation:** the tenth mention adds less than the first 
        <!--(tf in denominator)-->
-- **length normalization:** a match in a short field is stronger evidence than a match in a very long field
+- **length normalization:** a match in a short document is stronger evidence than a match in a very long document
 
 `srcsearch` uses Tantivy's $k_1=1.2$ and $b=0.75$.
 
