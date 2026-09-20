@@ -186,7 +186,7 @@ Tantivy documents ───► Tantivy index
 SearchRecord::RustIndexEntry
 
 kind            impl
-name            Multiline
+name            Flag for Multiline
 signature       impl Flag for Multiline
 documentation   ...
 file + lines    crates/core/flags/defs.rs:4503–...
