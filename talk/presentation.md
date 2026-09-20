@@ -383,7 +383,6 @@ For 100 records:
 | 5 | $\ln(20) \approx 3.00$ |
 | 50 | $\ln(2) \approx 0.69$ |
 
-In the example query `multiline AND search`, the term `multiline` tells us more than the common term `search`.
 
 ---
 
@@ -425,7 +424,7 @@ $$
 
 Three mentions in a long entity only slightly outweigh one in a compact entity.
 -->
----
+
 
 # Fields express what matters
 
@@ -456,6 +455,8 @@ Why does `Flag for Multiline` rank first?
 - `multiline` appears in its signature
 - `search` appears in its code and documentation
 - the rare, focused signature match dominates the score
+
+In the example query `multiline AND search`, the term `multiline` tells us more than the common term `search`.
 
 <!--BM25 ranks **lexical evidence**. It does not measure whether the result truly answers the question.-->
 
