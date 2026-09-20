@@ -357,7 +357,7 @@ ranked results
 
 ---
 
-# TF-IDF: two useful intuitions
+# TF-IDF
 
 $$
 \operatorname{IDF}(t)
@@ -365,7 +365,7 @@ $$
 $$
 
 - $N$: total number of records
-- $\operatorname{df}(t)$: number of records containing term $t$
+- $\operatorname{df}(t)$: number of records containing term $t$ (document frequency)
 
 $$
 \operatorname{score}(d,Q)
@@ -383,11 +383,11 @@ For 100 records:
 | 5 | $\ln(20) \approx 3.00$ |
 | 50 | $\ln(2) \approx 0.69$ |
 
-`multiline` tells us more than the common word `search`.
+In the example query `multiline AND search`, the term `multiline` tells us more than the common term `search`.
 
 ---
 
-# BM25: TF-IDF with restraint
+# BM25: TF-IDF with normalized term frequency
 
 $$
 \operatorname{BM25}(d,Q)
@@ -398,7 +398,8 @@ $$
 
 BM25 adds two practical ideas:
 
-- **term-frequency saturation:** the tenth mention adds less than the first
+- **term-frequency saturation:** the tenth mention adds less than the first 
+       <!--(tf in denominator)-->
 - **length normalization:** one hit in a focused record is stronger evidence than one hit in a very long record
 
 `srcsearch` uses Tantivy's $k_1=1.2$ and $b=0.75$.
