@@ -390,13 +390,16 @@ ranked results
 
 # TF-IDF
 
+In these two slides, a document $d$ means one searched field within a record,
+such as its signature, documentation, or code.
+
 $$
 \operatorname{IDF}(t)
 = \ln\!\left(\frac{N}{\operatorname{df}(t)}\right)
 $$
 
-- $N$: total number of documents 
-- $\operatorname{df}(t)$: number of documents containing term $t$ 
+- $N$: total number of documents
+- $\operatorname{df}(t)$: number of documents containing term $t$
 
 $$
 \operatorname{score}(d,Q)
@@ -413,8 +416,6 @@ For 100 records:
 | ---: | ---: |
 | 5 | $\ln(20) \approx 3.00$ |
 | 50 | $\ln(2) \approx 0.69$ |
-
-Note: For every term $t$, we define matching documents as field $f$ of record $r$ such that $r[d]$ contains $t$
 
 ---
 
@@ -435,8 +436,8 @@ $$
 {\operatorname{tf}(t,d)+k_1\left(1-b+b\frac{L_d}{\overline L}\right)}
 $$
 
-- $L_d$: length of the matching field in record $d$
-- $\overline L$: average length of that field
+- $L_d$: length of $d$ 
+- $\overline L$: average length of the documents 
 
 BM25 adds two practical ideas:
 
