@@ -298,6 +298,7 @@ the stored frequencies and positions also support ranking and phrase queries.-->
 # Back to our search example!
 
 Let $C(q)$ be the set of eligible records for query $q$.
+
 Let $P(t)$ be the set of records containing term $t$ in any searched field.
 
 For our query:
@@ -359,9 +360,12 @@ ranked results
 # TF-IDF: two useful intuitions
 
 $$
-\operatorname{idf}(t)
+\operatorname{IDF}(t)
 = \ln\!\left(\frac{N}{\operatorname{df}(t)}\right)
 $$
+
+- $N$: total number of records
+- $\operatorname{df}(t)$: number of records containing term $t$
 
 $$
 \operatorname{score}(d,Q)
