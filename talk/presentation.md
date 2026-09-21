@@ -529,83 +529,40 @@ Use document scope when the question asks for an explanation rather than an impl
 
 # 5. `srcsearch` for coding agents
 
-## Retrieval as the first step in repository exploration
+## Three repository exploration tasks
+
+Local searches on a pinned `ripgrep` checkout, using fixed first queries.
+`srcsearch` returns at most 10 results per task.
+
+This measures retrieval; agent answer quality and tool-call counts were not tested.
 
 ---
 
-# Agents begin with tasks, not identifiers
+# Tasks and observed results
 
-Typical requests sound like:
+| Task | `rg` | `srcsearch` |
+| --- | --- | --- |
+| Find multiline strategy selection and execution | 13 lines; neither implementation found | `MultiLine` rank 2; `Searcher` rank 4 |
+| Find the guide to searching only Rust files without a glob | 54 lines; relevant section at ranks 8 and 9 | Relevant guide section rank 4 |
+| Find `unrecognized flag --` construction and suggestion handling | 1 line; error construction found | Construction absent from top 10; `suggest()` rank 1 |
 
-- “Change how multiline searching works.”
-- “Find the code responsible for filtering files.”
-- “Locate the documentation for search configuration.”
-
-An agent entering an unfamiliar repository lacks the project's vocabulary.
-
-A few complete, ranked entities provide both **context** and **new search terms**.
+Results count when they point into the relevant entity or documentation section.
 
 ---
 
-# A two-stage workflow
+# What this suggests for agents
 
-```text
-task-level description
-        │
-        ▼
-srcsearch: ranked structural retrieval
-        │
-        ├── likely functions and types
-        ├── documentation sections
-        └── identifiers + source locations
-        │
-        ▼
-ripgrep / compiler / tests: precise verification
-        │
-        ▼
-informed code change
-```
+- Use `srcsearch` to discover likely implementation units and documentation.
+- Use `rg` for known strings and exact occurrences.
+- Inspect the returned source before drawing conclusions.
 
-Discover broadly; verify exhaustively before editing.
+Local median query times: **6.47–7.64 ms for `rg`**, **12.97–14.78 ms for `srcsearch`**
+(seven runs per query; index build excluded).
 
----
+These three fixed query pairs support complementary use, without establishing
+better or faster agent answers.
 
-# Why it fits agent tooling
-
-- Runs locally over the checked-out repository
-- Returns bounded, structured results
-- Preserves complete implementation units
-- Includes source locations for direct inspection
-- Supports JSON and score explanations
-- Searches code and project documentation together
-
-The index becomes a lightweight retrieval layer for developer tools.
-
----
-
-# Boundaries to remember
-
-- Ranking depends on the query and the indexed corpus.
-- The top result can still be wrong.
-- Lexical search does not understand synonyms or intent.
-- The index must be built and kept fresh.
-- Only supported languages and structures get meaningful boundaries.
-
-A possible next step is hybrid search: lexical ranking plus embeddings, while preserving entity boundaries and source locations.
-
----
-
-# Which tool should I use?
-
-| Need | Start with |
-| --- | --- |
-| Known text or regular expression | `ripgrep` |
-| Every occurrence | `ripgrep` |
-| Likely implementation units | `srcsearch` |
-| Ranked documentation sections | `srcsearch --scope doc` |
-| Explore, then verify | both |
-
-Better source search can begin with a more meaningful unit to search.
+[Benchmark: queries, locations, and measurements](../benchmarks/ripgrep-codex.md)
 
 ---
 
