@@ -577,21 +577,11 @@ Results count when they point into the relevant entity or documentation section.
 - Use `rg` for known strings and exact occurrences.
 - Inspect the returned source before drawing conclusions.
 
-Local median query times: **6.47–7.64 ms for `rg`**, **12.97–14.78 ms for `srcsearch`**
-(seven runs per query; index build excluded).
-
-These three fixed query pairs support complementary use, without establishing
-better or faster agent answers.
-
 [Benchmark: queries, locations, and measurements](../benchmarks/ripgrep-codex.md)
 
 ---
 
 <!-- .slide: class="lead" -->
-
-# A line tells you where words meet.
-
-# An entity tells you where ideas belong.
 
 ## Questions?
 
@@ -606,5 +596,3 @@ better or faster agent answers.
 - [Tantivy query parser](https://docs.rs/tantivy/0.25.0/tantivy/query/struct.QueryParser.html)
 - [`rust-indexer`](https://github.com/jslambda/rust-indexer)
 - [`markdown-indexer`](https://github.com/jslambda/markdown-indexer)
-
-The numerical examples are illustrative. The opening scores are measured from the pinned `ripgrep` example described in `talk.md`.
