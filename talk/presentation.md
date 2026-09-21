@@ -538,6 +538,27 @@ This measures retrieval; agent answer quality and tool-call counts were not test
 
 ---
 
+# Commands for the three tasks
+
+Run from the `ripgrep` root, with `srcsearch` on PATH and `$bench_index`
+pointing to its prebuilt index (absolute path).
+
+```sh
+# 1. Multiline strategy selection and execution
+rg -n -i 'multiline.*search' .
+srcsearch search -i "$bench_index" -q 'multiline AND search' -l 10
+
+# 2. Guide to searching only Rust files
+rg -n -i 'search.*file' -g '*.md' .
+srcsearch search -i "$bench_index" -s doc -q 'search for file' -l 10
+
+# 3. Error construction and suggestion handling
+rg -n -F 'unrecognized flag --' .
+srcsearch search -i "$bench_index" -q 'unrecognized flag' -l 10
+```
+
+---
+
 # Tasks and observed results
 
 | Task | `rg` | `srcsearch` |
