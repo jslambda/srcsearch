@@ -388,7 +388,7 @@ ranked results
 
 ---
 
-# TF-IDF
+# TF-IDF: Ranking the results
 
 In these two slides, a document $d$ means one searched field within a record,
 such as its signature, documentation, or code.
