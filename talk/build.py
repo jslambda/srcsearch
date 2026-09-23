@@ -3,12 +3,12 @@
 
 import argparse
 import html
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import tarfile
 import tempfile
+from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REVEAL = "https://cdn.jsdelivr.net/npm/reveal.js@6.0.1/"
