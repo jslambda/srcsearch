@@ -22,3 +22,6 @@ Cargo.lock
 
 /target
 .DS_Store
+/talk/dist/
+/talk/.build-cache/
+/talk/__pycache__/
