@@ -426,19 +426,26 @@ find every exact occurrence and support regex-based follow-up searches.
 
 ### Offline presentation
 
-Run `sh talk/build.sh` to bundle `talk/index.html` and `talk/presentation.md`
+Run `sh talk/build.sh revealjs` (or just `sh talk/build.sh`) to bundle
+`talk/index.html` and `talk/presentation.md`
 into `talk/dist/`. Open `talk/dist/index.html` directly in a browser; no server
 or internet connection is needed. Copy the entire `dist` directory to share it.
 
-The build requires Python 3 and curl. Its first run downloads the versions of
+The Reveal.js build requires Python 3 and curl. Its first run downloads the versions of
 Reveal.js and MathJax already used by the deck, including MathJax's default font
 data. Downloads are cached in `talk/.build-cache/` for offline builds. Equations
 use SVG output to avoid browser restrictions on local font files. External
 reference links still need internet access.
 
-The script refuses to overwrite an existing output directory. For a fresh build,
+The Reveal.js build refuses to overwrite an existing output directory. For a fresh build,
 remove the old generated `talk/dist/` directory or choose another destination:
 `sh talk/build.sh --output /tmp/srcsearch-slides`.
+
+For Pandoc build, run `sh talk/build.sh pandoc`. This requires Pandoc
+and runs `pandoc presentation.md --standalone --math-method=mathjax -o dist/pandoc.html`
+from `talk/`, creating `dist/` if needed. It overwrites `talk/dist/pandoc.html`;
+this mode does not bundle MathJax for offline use.
+
 To preview the source deck while editing, run `sh talk/runserver.sh` and visit
 `http://127.0.0.1:8000` (this preview requires internet access).
 
