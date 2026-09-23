@@ -31,7 +31,7 @@ def unpack(archive, destination):
                 continue
             target = destination.joinpath(*parts[1:])
             target.parent.mkdir(parents=True, exist_ok=True)
-            with package.extractfile(member) as source, target.open("wb") as output:
+            with package.extractfile(member) as source, target.open("wb") as output: # type: ignore[union-attr]
                 shutil.copyfileobj(source, output)
 
 
