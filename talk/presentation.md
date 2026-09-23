@@ -429,7 +429,7 @@ For 100 documents:
 
 $$
 \operatorname{IDF}_{\mathrm{BM25}}(t)
-= \ln\!\left(1+\frac{N-\operatorname{df}(t)+0.5}
+= \ln\\left(1+\frac{N-\operatorname{df}(t)+0.5}
 {\operatorname{df}(t)+0.5}\right)
 $$
 
@@ -589,6 +589,10 @@ Results count when they point into the relevant entity or documentation section.
 
 ---
 
+# Future work
+ - Python (already implemented), JavaScript, Java
+ - Vector search
+ 
 # References
 
 - [`srcsearch` repository and README](https://github.com/jslambda/srcsearch)
