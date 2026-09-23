@@ -564,7 +564,7 @@ srcsearch search -i "$bench_index" -q 'unrecognized flag' -l 10
 | Task | `rg` | `srcsearch` |
 | --- | --- | --- |
 | Find multiline strategy selection and execution | 13 lines; neither implementation found | `MultiLine` rank 2; `Searcher` rank 4 |
-| Find the guide to searching only Rust files without a glob | 54 lines; relevant section at ranks 8 and 9 | Relevant guide section rank 4 |
+| Find the guide to searching files (search by using type option is the main target) | 51 results; some are relevant but they are hard to find | Relevant guide section rank 4 |
 | Find `unrecognized flag --` construction and suggestion handling | 1 line; error construction found | Construction absent from top 10; `suggest()` rank 1 |
 
 Results count when they point into the relevant entity or documentation section.
@@ -591,7 +591,7 @@ Results count when they point into the relevant entity or documentation section.
 
 # Future work
  - Python (already implemented), JavaScript, Java
- - Vector search
+ - Semantic search (specially useful for searching documentation and comments)
  
 # References
 
