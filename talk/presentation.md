@@ -478,7 +478,7 @@ Three mentions in a long entity only slightly outweigh one in a compact entity.
 | `title`, `name`, `qualified_name` | 4× |
 | `signature`, `doc`, `body_text` | 2× |
 | `code` | 1× |
-
+<!--TODO impl: boosting and analysis of name needs to be revised-->
 For `multiline AND search`:
 
 ```text
@@ -548,7 +548,7 @@ pointing to its prebuilt index (absolute path).
 rg -n -i 'multiline.*search' .
 srcsearch search -i "$bench_index" -q 'multiline AND search' -l 10
 
-# 2. Guide to searching only Rust files
+# 2. Guide to searching files
 rg -n -i 'search.*file' -g '*.md' .
 srcsearch search -i "$bench_index" -s doc -q 'search for file' -l 10
 
@@ -577,22 +577,23 @@ Results count when they point into the relevant entity or documentation section.
 - Use `rg` for known strings and exact occurrences.
 - Inspect the returned source before drawing conclusions.
 
-[Benchmark: queries, locations, and measurements](../benchmarks/ripgrep-codex.md)
+<!--[Benchmark: queries, locations, and measurements](../benchmarks/ripgrep-codex.md)-->
 
 ---
 
 <!-- .slide: class="lead" -->
 
-## Questions?
+# Questions?
 
 [`github.com/jslambda/srcsearch`](https://github.com/jslambda/srcsearch)
 
----
 
-# Future work
+## Future work
  - Python (already implemented), JavaScript, Java
  - Semantic search (specially useful for searching documentation and comments)
  
+---
+
 # References
 
 - [`srcsearch` repository and README](https://github.com/jslambda/srcsearch)
