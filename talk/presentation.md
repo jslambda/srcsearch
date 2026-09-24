@@ -586,7 +586,7 @@ Results count when they point into the relevant entity or documentation section.
 # Questions?
 
 [`github.com/jslambda/srcsearch`](https://github.com/jslambda/srcsearch)
-
+[`https://jslambda.github.io/talks/srcsearch`](https://jslambda.github.io/talks/srcsearch)
 
 ## Future work
  - Python (already implemented), JavaScript, Java
