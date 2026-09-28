@@ -16,7 +16,7 @@ search strategies for either tool.
 ## Corpus and setup
 
 - ripgrep: `.project/ripgrep`, commit
-  `3fce3b5bb0236da2df6d99672afb8a719642eca7`
+  `3fce3b5bb0236da2df6d99672afb8a719642eca7`. ripgrep is assumed to be checked out in `.project/ripgrep`.
 - srcsearch: `0.2.0`, built from this checkout
 - `rg`: local `ripgrep 15.2.0`
 - Index build is outside the query timings. Build it once, then run all
