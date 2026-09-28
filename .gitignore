@@ -25,3 +25,5 @@ Cargo.lock
 /talk/dist/
 /talk/.build-cache/
 /talk/__pycache__/
+
+# TODO: Adjust srcsearch to respect .gitignore
