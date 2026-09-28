@@ -38,7 +38,7 @@ Use the *absolute* path to `bench_index` from the setup shell in every
 | Task | Question | `rg` query | `srcsearch` query | Answer location |
 | --- | --- | --- | --- | --- |
 | 1. Cross-line search | Where are the strategy chosen and the multiline search performed? | `rg -n -i 'multiline.*search' .` | `"$srcsearch_bin" search -i "$bench_index" -q 'multiline AND search' -l 10` | `crates/searcher/src/searcher/mod.rs` around 769–792 and `crates/searcher/src/searcher/glue.rs` around 142–210 |
-| 2. File types | Where does the guide explain searching only Rust files without a glob? | `rg -n -i 'search.*file' -g '*.md' .` | `"$srcsearch_bin" search -i "$bench_index" -s doc -q 'search for file' -l 10` | `GUIDE.md` section “Manual filtering: file types,” starting at 324; `--type rust` is shown around 337–345 |
+| 2. File types | Where does the guide explain searching files, especially filtering by file type with `--type`? | `rg -n -i 'search.*file' -g '*.md' .` | `"$srcsearch_bin" search -i "$bench_index" -s doc -q 'search for file' -l 10` | `GUIDE.md` section “Manual filtering: file types,” starting at 324; `--type rust` is shown around 337–345 |
 | 3. Exact error | Where is `unrecognized flag --` constructed, and how is a suggestion added? | `rg -n -F 'unrecognized flag --' .` | `"$srcsearch_bin" search -i "$bench_index" -q 'unrecognized flag' -l 10` | `crates/core/flags/parse.rs` around 265–269 |
 
 For each output, record the rank of the first result pointing into the answer
