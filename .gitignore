@@ -19,11 +19,10 @@ Cargo.lock
 
 .project
 
-
-/target
+target
 .DS_Store
-/talk/dist/
-/talk/.build-cache/
-/talk/__pycache__/
+dist
+.build-cache
+__pycache__
 
 # TODO: Adjust srcsearch to respect .gitignore
