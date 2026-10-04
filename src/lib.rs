@@ -345,9 +345,10 @@ fn collect_supported_files(
 
     // Apply .gitignore rules while walking so ignored directories are never descended into.
     let mut builder = WalkBuilder::new(target_dir);
+    // A subdirectory scan must also apply .gitignore files above target_dir.
     builder
         .hidden(false)
-        .parents(false)
+        .parents(true)
         .ignore(false)
         .git_global(false)
         .git_exclude(false)
@@ -1188,6 +1189,34 @@ mod tests {
             markdown_files,
             vec![root.join("README.md"), root.join("docs/keep.md")]
         );
+
+        fs::remove_dir_all(&root).expect("fixture directory should be removed");
+    }
+
+    #[test]
+    fn index_target_subdirectory_uses_parent_gitignore_rules() {
+        let root = temp_path("subdirectory-gitignore");
+        let subdirectory = root.join("src");
+        fs::create_dir_all(&subdirectory).expect("subdirectory should be created");
+        fs::write(root.join(".gitignore"), "*.rs\n")
+            .expect("project ignore rules should be written");
+        fs::write(subdirectory.join(".gitignore"), "!keep.rs\n")
+            .expect("nested ignore rules should be written");
+        fs::write(subdirectory.join("keep.rs"), "pub fn keep() {}\n")
+            .expect("kept file should be written");
+        fs::write(subdirectory.join("skip.rs"), "pub fn skip() {}\n")
+            .expect("ignored file should be written");
+
+        let records =
+            super::index_target(&subdirectory, &root).expect("subdirectory should be indexed");
+        assert!(records.iter().any(|record| matches!(
+            record,
+            SearchRecord::RustIndexEntry(entry) if entry.file == "src/keep.rs"
+        )));
+        assert!(!records.iter().any(|record| matches!(
+            record,
+            SearchRecord::RustIndexEntry(entry) if entry.file == "src/skip.rs"
+        )));
 
         fs::remove_dir_all(&root).expect("fixture directory should be removed");
     }
