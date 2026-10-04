@@ -11,6 +11,7 @@
 //!
 //! See the project README for CLI examples and end-to-end usage.
 
+use ignore::{DirEntry, WalkBuilder};
 use markdown2json::{CodeBlock, Section, index_markdown};
 use python_indexer::{IndexEntry as PythonIndexEntry, build_file_index as build_python_file_index};
 use regex::Regex;
@@ -27,7 +28,6 @@ use tantivy::schema::{
 use tantivy::tokenizer::{Language, LowerCaser, SimpleTokenizer, Stemmer, TextAnalyzer};
 use tantivy::{Index, Score, TantivyDocument, Term, doc};
 use tantivy::{collector::TopDocs, query::QueryParser};
-use walkdir::{DirEntry, WalkDir};
 
 pub type AppResult<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -328,7 +328,9 @@ fn clone_rust_index_entry(entry: &RustIndexEntry) -> RustIndexEntry {
     }
 }
 
-/// Collects Rust, Python, and Markdown files under a project root while honoring ignore rules.
+/// Collects supported files, excluding Git-ignored paths and directories named `target`,
+/// `.git`, or `node_modules`. These three directory names are always skipped, even when
+/// `.gitignore` rules would include them.
 pub fn collect_files(project_root: &Path) -> AppResult<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)> {
     collect_supported_files(project_root)
 }
@@ -341,13 +343,21 @@ fn collect_supported_files(
     let mut python_files = Vec::new();
     let mut markdown_files = Vec::new();
 
-    for entry in WalkDir::new(target_dir)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|entry| should_walk(entry))
-    {
-        let entry = entry.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
-        if !entry.file_type().is_file() {
+    // Apply .gitignore rules while walking so ignored directories are never descended into.
+    let mut builder = WalkBuilder::new(target_dir);
+    // A subdirectory scan must also apply .gitignore files above target_dir.
+    builder
+        .hidden(false)
+        .parents(true)
+        .ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .require_git(false)
+        .filter_entry(should_walk);
+
+    for entry in builder.build() {
+        let entry = entry?;
+        if !entry.file_type().is_some_and(|kind| kind.is_file()) {
             continue;
         }
 
@@ -375,7 +385,7 @@ fn classify_supported_file(path: &Path) -> Option<SupportedFileKind> {
 /// Decides whether a directory entry should be traversed during filesystem walking.
 fn should_walk(entry: &DirEntry) -> bool {
     let file_name = entry.file_name().to_string_lossy();
-    if entry.file_type().is_dir() {
+    if entry.file_type().is_some_and(|kind| kind.is_dir()) {
         !matches!(file_name.as_ref(), "target" | ".git" | "node_modules")
     } else {
         true
@@ -1122,9 +1132,10 @@ fn extract_code_snippet(
 #[cfg(test)]
 mod tests {
     use super::{
-        MatchedTerm, SearchRecord, SearchScope, extract_code_snippet, extract_matching_terms,
-        get_tantivy_doc_field, replace_explanation_field_indices, search_tantivy_index,
-        search_tantivy_index_with_explain, update_tantivy_index, write_tantivy_index,
+        MatchedTerm, SearchRecord, SearchScope, collect_files, extract_code_snippet,
+        extract_matching_terms, get_tantivy_doc_field, replace_explanation_field_indices,
+        search_tantivy_index, search_tantivy_index_with_explain, update_tantivy_index,
+        write_tantivy_index,
     };
     use markdown2json::{CodeBlock, Section};
     use rust2json::IndexEntry;
@@ -1140,6 +1151,102 @@ mod tests {
             .expect("system time should be after unix epoch")
             .as_nanos();
         std::env::temp_dir().join(format!("rustearch-{test_name}-{unique}"))
+    }
+
+    #[test]
+    fn collects_files_using_nested_gitignore_rules_and_negations() {
+        let root = temp_path("gitignore-collection");
+        fs::create_dir_all(root.join("dist")).expect("dist directory should be created");
+        fs::create_dir_all(root.join("docs")).expect("docs directory should be created");
+        fs::write(root.join(".gitignore"), "dist/\n*.md\n!README.md\n")
+            .expect("root ignore rules should be written");
+        // Only .gitignore rules apply; a nested rule cannot reopen an ignored directory.
+        fs::write(root.join(".ignore"), "script.py\n")
+            .expect("non-Git ignore rules should be written");
+        fs::write(root.join("dist/.gitignore"), "!generated.rs\n")
+            .expect("rules inside an ignored directory should be written");
+        // A nested negation can reopen a file when its parent directory is included.
+        fs::write(root.join("docs/.gitignore"), "!keep.md\n")
+            .expect("nested ignore rules should be written");
+        for path in [
+            "src.rs",
+            "script.py",
+            "README.md",
+            "draft.md",
+            "dist/generated.rs",
+            "docs/keep.md",
+            "docs/draft.md",
+        ] {
+            fs::write(root.join(path), "# Heading\n").expect("fixture file should be written");
+        }
+
+        let (rust_files, python_files, mut markdown_files) =
+            collect_files(&root).expect("file collection should succeed");
+        markdown_files.sort();
+        assert_eq!(rust_files, vec![root.join("src.rs")]);
+        assert_eq!(python_files, vec![root.join("script.py")]);
+        assert_eq!(
+            markdown_files,
+            vec![root.join("README.md"), root.join("docs/keep.md")]
+        );
+
+        fs::remove_dir_all(&root).expect("fixture directory should be removed");
+    }
+
+    #[test]
+    fn index_target_subdirectory_uses_parent_gitignore_rules() {
+        let root = temp_path("subdirectory-gitignore");
+        let subdirectory = root.join("src");
+        fs::create_dir_all(&subdirectory).expect("subdirectory should be created");
+        fs::write(root.join(".gitignore"), "*.rs\n")
+            .expect("project ignore rules should be written");
+        fs::write(subdirectory.join(".gitignore"), "!keep.rs\n")
+            .expect("nested ignore rules should be written");
+        fs::write(subdirectory.join("keep.rs"), "pub fn keep() {}\n")
+            .expect("kept file should be written");
+        fs::write(subdirectory.join("skip.rs"), "pub fn skip() {}\n")
+            .expect("ignored file should be written");
+
+        let records =
+            super::index_target(&subdirectory, &root).expect("subdirectory should be indexed");
+        assert!(records.iter().any(|record| matches!(
+            record,
+            SearchRecord::RustIndexEntry(entry) if entry.file == "src/keep.rs"
+        )));
+        assert!(!records.iter().any(|record| matches!(
+            record,
+            SearchRecord::RustIndexEntry(entry) if entry.file == "src/skip.rs"
+        )));
+
+        fs::remove_dir_all(&root).expect("fixture directory should be removed");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn skips_unreadable_ignored_directory_before_descending() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temp_path("unreadable-ignored-directory");
+        let ignored = root.join(".venv");
+        fs::create_dir_all(&ignored).expect("ignored directory should be created");
+        fs::write(root.join(".gitignore"), ".venv/\n").expect("ignore rules should be written");
+        fs::write(root.join("visible.rs"), "fn visible() {}\n")
+            .expect("visible file should be written");
+        fs::set_permissions(&ignored, fs::Permissions::from_mode(0o000))
+            .expect("ignored directory should be made unreadable");
+
+        // Privileged test runners may still be able to read a mode-000 directory.
+        if fs::read_dir(&ignored).is_err() {
+            let (rust_files, python_files, markdown_files) =
+                collect_files(&root).expect("ignored directory should be pruned");
+            assert_eq!(rust_files, vec![root.join("visible.rs")]);
+            assert!(python_files.is_empty());
+            assert!(markdown_files.is_empty());
+        }
+
+        fs::set_permissions(&ignored, fs::Permissions::from_mode(0o700))
+            .expect("ignored directory permissions should be restored");
+        fs::remove_dir_all(&root).expect("fixture directory should be removed");
     }
 
     #[test]

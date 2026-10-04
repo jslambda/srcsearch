@@ -24,5 +24,3 @@ target
 dist
 .build-cache
 __pycache__
-
-# TODO: Adjust srcsearch to respect .gitignore
