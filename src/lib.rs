@@ -11,11 +11,13 @@
 //!
 //! See the project README for CLI examples and end-to-end usage.
 
+use ignore::WalkBuilder;
 use markdown2json::{CodeBlock, Section, index_markdown};
 use python_indexer::{IndexEntry as PythonIndexEntry, build_file_index as build_python_file_index};
 use regex::Regex;
 use rust2json::{IndexEntry as RustIndexEntry, build_file_index as build_rust_file_index};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
 use std::io;
@@ -328,7 +330,9 @@ fn clone_rust_index_entry(entry: &RustIndexEntry) -> RustIndexEntry {
     }
 }
 
-/// Collects Rust, Python, and Markdown files under a project root while honoring ignore rules.
+/// Collects supported files, excluding Git-ignored paths and directories named `target`,
+/// `.git`, or `node_modules`. These three directory names are always skipped, even when
+/// `.gitignore` rules would include them.
 pub fn collect_files(project_root: &Path) -> AppResult<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)> {
     collect_supported_files(project_root)
 }
@@ -359,7 +363,51 @@ fn collect_supported_files(
         }
     }
 
+    let ignored = git_ignored_paths(
+        target_dir,
+        rust_files
+            .iter()
+            .chain(&python_files)
+            .chain(&markdown_files),
+    )?;
+    let is_ignored = |path: &PathBuf| {
+        let relative = path.strip_prefix(target_dir).unwrap_or(path);
+        ignored.contains(relative.as_os_str().as_encoded_bytes())
+    };
+    rust_files.retain(|path| !is_ignored(path));
+    python_files.retain(|path| !is_ignored(path));
+    markdown_files.retain(|path| !is_ignored(path));
+
     Ok((rust_files, python_files, markdown_files))
+}
+
+/// Applies root and nested `.gitignore` rules, including negations, without requiring Git.
+fn git_ignored_paths<'a>(
+    root: &Path,
+    paths: impl Iterator<Item = &'a PathBuf>,
+) -> AppResult<HashSet<Vec<u8>>> {
+    // Only project-local .gitignore files apply; other ignore sources are excluded.
+    let mut builder = WalkBuilder::new(root);
+    builder
+        .hidden(false)
+        .parents(false)
+        .ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .require_git(false);
+    let mut matcher = builder.build_matchers().remove(0);
+    let mut ignored = HashSet::new();
+    for path in paths {
+        let relative = path.strip_prefix(root).unwrap_or(path);
+        let (matched, error) = matcher.matched_with_errors(relative, false);
+        if let Some(error) = error {
+            return Err(error.into());
+        }
+        if matched.is_ignore() {
+            ignored.insert(relative.as_os_str().as_encoded_bytes().to_vec());
+        }
+    }
+    Ok(ignored)
 }
 
 /// Classifies a path by extension into a supported source type for indexing.
@@ -1122,9 +1170,10 @@ fn extract_code_snippet(
 #[cfg(test)]
 mod tests {
     use super::{
-        MatchedTerm, SearchRecord, SearchScope, extract_code_snippet, extract_matching_terms,
-        get_tantivy_doc_field, replace_explanation_field_indices, search_tantivy_index,
-        search_tantivy_index_with_explain, update_tantivy_index, write_tantivy_index,
+        MatchedTerm, SearchRecord, SearchScope, collect_files, extract_code_snippet,
+        extract_matching_terms, get_tantivy_doc_field, replace_explanation_field_indices,
+        search_tantivy_index, search_tantivy_index_with_explain, update_tantivy_index,
+        write_tantivy_index,
     };
     use markdown2json::{CodeBlock, Section};
     use rust2json::IndexEntry;
@@ -1140,6 +1189,46 @@ mod tests {
             .expect("system time should be after unix epoch")
             .as_nanos();
         std::env::temp_dir().join(format!("rustearch-{test_name}-{unique}"))
+    }
+
+    #[test]
+    fn collects_files_using_nested_gitignore_rules_and_negations() {
+        let root = temp_path("gitignore-collection");
+        fs::create_dir_all(root.join("dist")).expect("dist directory should be created");
+        fs::create_dir_all(root.join("docs")).expect("docs directory should be created");
+        fs::write(root.join(".gitignore"), "dist/\n*.md\n!README.md\n")
+            .expect("root ignore rules should be written");
+        // Only .gitignore rules apply; a nested rule cannot reopen an ignored directory.
+        fs::write(root.join(".ignore"), "script.py\n")
+            .expect("non-Git ignore rules should be written");
+        fs::write(root.join("dist/.gitignore"), "!generated.rs\n")
+            .expect("rules inside an ignored directory should be written");
+        // A nested negation can reopen a file when its parent directory is included.
+        fs::write(root.join("docs/.gitignore"), "!keep.md\n")
+            .expect("nested ignore rules should be written");
+        for path in [
+            "src.rs",
+            "script.py",
+            "README.md",
+            "draft.md",
+            "dist/generated.rs",
+            "docs/keep.md",
+            "docs/draft.md",
+        ] {
+            fs::write(root.join(path), "# Heading\n").expect("fixture file should be written");
+        }
+
+        let (rust_files, python_files, mut markdown_files) =
+            collect_files(&root).expect("file collection should succeed");
+        markdown_files.sort();
+        assert_eq!(rust_files, vec![root.join("src.rs")]);
+        assert_eq!(python_files, vec![root.join("script.py")]);
+        assert_eq!(
+            markdown_files,
+            vec![root.join("README.md"), root.join("docs/keep.md")]
+        );
+
+        fs::remove_dir_all(&root).expect("fixture directory should be removed");
     }
 
     #[test]

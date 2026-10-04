@@ -51,6 +51,13 @@ cargo run -- index -p . -o index
 
 > `--output-dir` must be empty (or not exist yet) when creating a fresh index.
 
+The `index` and `json` commands exclude files matched by
+`.gitignore` rules under the project root, including rules in nested `.gitignore` files.
+The project does not need to be a Git repository or have Git installed.
+The exclusions for directories named `target`, `.git`, and `node_modules`
+still apply even without `.gitignore` file. `update` only processes explicitly supplied paths, and `search` queries
+the saved index, so rebuild an existing index after changing ignore rules.
+
 ### 3) Update an existing index after file changes
 
 ```bash
