@@ -11,13 +11,12 @@
 //!
 //! See the project README for CLI examples and end-to-end usage.
 
-use ignore::WalkBuilder;
+use ignore::{DirEntry, WalkBuilder};
 use markdown2json::{CodeBlock, Section, index_markdown};
 use python_indexer::{IndexEntry as PythonIndexEntry, build_file_index as build_python_file_index};
 use regex::Regex;
 use rust2json::{IndexEntry as RustIndexEntry, build_file_index as build_rust_file_index};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
 use std::io;
@@ -29,7 +28,6 @@ use tantivy::schema::{
 use tantivy::tokenizer::{Language, LowerCaser, SimpleTokenizer, Stemmer, TextAnalyzer};
 use tantivy::{Index, Score, TantivyDocument, Term, doc};
 use tantivy::{collector::TopDocs, query::QueryParser};
-use walkdir::{DirEntry, WalkDir};
 
 pub type AppResult<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -345,13 +343,20 @@ fn collect_supported_files(
     let mut python_files = Vec::new();
     let mut markdown_files = Vec::new();
 
-    for entry in WalkDir::new(target_dir)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|entry| should_walk(entry))
-    {
-        let entry = entry.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
-        if !entry.file_type().is_file() {
+    // Apply .gitignore rules while walking so ignored directories are never descended into.
+    let mut builder = WalkBuilder::new(target_dir);
+    builder
+        .hidden(false)
+        .parents(false)
+        .ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .require_git(false)
+        .filter_entry(should_walk);
+
+    for entry in builder.build() {
+        let entry = entry?;
+        if !entry.file_type().is_some_and(|kind| kind.is_file()) {
             continue;
         }
 
@@ -363,51 +368,7 @@ fn collect_supported_files(
         }
     }
 
-    let ignored = git_ignored_paths(
-        target_dir,
-        rust_files
-            .iter()
-            .chain(&python_files)
-            .chain(&markdown_files),
-    )?;
-    let is_ignored = |path: &PathBuf| {
-        let relative = path.strip_prefix(target_dir).unwrap_or(path);
-        ignored.contains(relative.as_os_str().as_encoded_bytes())
-    };
-    rust_files.retain(|path| !is_ignored(path));
-    python_files.retain(|path| !is_ignored(path));
-    markdown_files.retain(|path| !is_ignored(path));
-
     Ok((rust_files, python_files, markdown_files))
-}
-
-/// Applies root and nested `.gitignore` rules, including negations, without requiring Git.
-fn git_ignored_paths<'a>(
-    root: &Path,
-    paths: impl Iterator<Item = &'a PathBuf>,
-) -> AppResult<HashSet<Vec<u8>>> {
-    // Only project-local .gitignore files apply; other ignore sources are excluded.
-    let mut builder = WalkBuilder::new(root);
-    builder
-        .hidden(false)
-        .parents(false)
-        .ignore(false)
-        .git_global(false)
-        .git_exclude(false)
-        .require_git(false);
-    let mut matcher = builder.build_matchers().remove(0);
-    let mut ignored = HashSet::new();
-    for path in paths {
-        let relative = path.strip_prefix(root).unwrap_or(path);
-        let (matched, error) = matcher.matched_with_errors(relative, false);
-        if let Some(error) = error {
-            return Err(error.into());
-        }
-        if matched.is_ignore() {
-            ignored.insert(relative.as_os_str().as_encoded_bytes().to_vec());
-        }
-    }
-    Ok(ignored)
 }
 
 /// Classifies a path by extension into a supported source type for indexing.
@@ -423,7 +384,7 @@ fn classify_supported_file(path: &Path) -> Option<SupportedFileKind> {
 /// Decides whether a directory entry should be traversed during filesystem walking.
 fn should_walk(entry: &DirEntry) -> bool {
     let file_name = entry.file_name().to_string_lossy();
-    if entry.file_type().is_dir() {
+    if entry.file_type().is_some_and(|kind| kind.is_dir()) {
         !matches!(file_name.as_ref(), "target" | ".git" | "node_modules")
     } else {
         true
@@ -1228,6 +1189,34 @@ mod tests {
             vec![root.join("README.md"), root.join("docs/keep.md")]
         );
 
+        fs::remove_dir_all(&root).expect("fixture directory should be removed");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn skips_unreadable_ignored_directory_before_descending() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temp_path("unreadable-ignored-directory");
+        let ignored = root.join(".venv");
+        fs::create_dir_all(&ignored).expect("ignored directory should be created");
+        fs::write(root.join(".gitignore"), ".venv/\n").expect("ignore rules should be written");
+        fs::write(root.join("visible.rs"), "fn visible() {}\n")
+            .expect("visible file should be written");
+        fs::set_permissions(&ignored, fs::Permissions::from_mode(0o000))
+            .expect("ignored directory should be made unreadable");
+
+        // Privileged test runners may still be able to read a mode-000 directory.
+        if fs::read_dir(&ignored).is_err() {
+            let (rust_files, python_files, markdown_files) =
+                collect_files(&root).expect("ignored directory should be pruned");
+            assert_eq!(rust_files, vec![root.join("visible.rs")]);
+            assert!(python_files.is_empty());
+            assert!(markdown_files.is_empty());
+        }
+
+        fs::set_permissions(&ignored, fs::Permissions::from_mode(0o700))
+            .expect("ignored directory permissions should be restored");
         fs::remove_dir_all(&root).expect("fixture directory should be removed");
     }
 
