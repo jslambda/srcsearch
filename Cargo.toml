@@ -13,6 +13,7 @@ exclude = ["tests/fixtures/**"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
+ignore = "0.4.33"
 markdown2json = "0.1.1"
 python-indexer = { path = "crates/python-indexer" }
 rust2json = "0.1.0"
