@@ -149,6 +149,7 @@ Notes:
 
 - Queries run against `title`, `body_text`, and Rust `doc` fields use stemming, so inflected forms (for example `running` vs `run`) may match.
 - Source search hits include `qualified_name`; Python methods use their class-qualified form (for example `Client.fetch`) so identically named methods can be distinguished in text and JSON output.
+- `name` and `qualified_name` queries are case-insensitive and split identifier separators such as `.` and `_`, without stemming. For example, `qualified_name:fetch` matches `Client.fetch`, and `name:tantivy` matches `write_tantivy_index`.
 
 ### Convenience scripts
 
