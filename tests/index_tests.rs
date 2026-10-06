@@ -264,19 +264,28 @@ fn indexes_and_searches_python_source() -> std::result::Result<(), Box<dyn std::
         Some("Client")
     );
 
-    for non_exact_query in ["qualified_name:fetch", "qualified_name:client.fetch"] {
+    for component_query in ["qualified_name:fetch", "qualified_name:client.fetch"] {
         let hits = search_tantivy_index_with_explain(
             &index_dir,
-            non_exact_query,
+            component_query,
             10,
             SearchScope::All,
             false,
         )?;
         assert!(
-            hits.is_empty(),
-            "raw qualified-name field should not match {non_exact_query}"
+            hits.iter()
+                .any(|hit| hit.hit.qualified_name.as_deref() == Some("Client.fetch")),
+            "tokenized qualified-name field should match {component_query}"
         );
     }
+
+    let case_insensitive_name_hits =
+        search_tantivy_index_with_explain(&index_dir, "name:GREET", 10, SearchScope::All, false)?;
+    assert!(
+        case_insensitive_name_hits
+            .iter()
+            .any(|hit| hit.hit.name.as_deref() == Some("greet"))
+    );
 
     let other_client_hits = search_tantivy_index_with_explain(
         &index_dir,

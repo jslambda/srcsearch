@@ -32,6 +32,7 @@ use tantivy::{collector::TopDocs, query::QueryParser};
 pub type AppResult<T> = std::result::Result<T, Box<dyn Error>>;
 
 const DOC_TEXT_ANALYZER: &str = "doc_text_en_stem";
+const SOURCE_NAME_ANALYZER: &str = "source_name";
 
 #[derive(Debug)]
 pub enum SearchRecord {
@@ -583,7 +584,7 @@ pub fn write_tantivy_index(
             ),
         )
     })?;
-    register_doc_text_analyzer(&index);
+    register_text_analyzers(&index);
     let mut writer = index.writer(50_000_000).map_err(|err| {
         io::Error::new(
             io::ErrorKind::Other,
@@ -645,7 +646,7 @@ pub fn update_tantivy_index(
                 ),
             )
         })?;
-        register_doc_text_analyzer(&index);
+        register_text_analyzers(&index);
         index
     } else {
         fs::create_dir_all(index_dir).map_err(|err| {
@@ -666,7 +667,7 @@ pub fn update_tantivy_index(
                 ),
             )
         })?;
-        register_doc_text_analyzer(&index);
+        register_text_analyzers(&index);
         index
     };
 
@@ -718,13 +719,23 @@ fn build_tantivy_schema() -> Schema {
                 .set_index_option(IndexRecordOption::WithFreqsAndPositions),
         )
         .set_stored();
+    // Symbol names need identifier-aware lookup rather than STRING's single,
+    // case-sensitive token. SimpleTokenizer keeps identifier components while
+    // splitting separators such as `.` and `_`; unlike prose, names are not stemmed.
+    let source_name_options = TextOptions::default()
+        .set_indexing_options(
+            TextFieldIndexing::default()
+                .set_tokenizer(SOURCE_NAME_ANALYZER)
+                .set_index_option(IndexRecordOption::WithFreqsAndPositions),
+        )
+        .set_stored();
 
     let mut schema_builder = Schema::builder();
     schema_builder.add_text_field("record_type", STRING | STORED);
     schema_builder.add_text_field("file_path", STRING | STORED);
     schema_builder.add_text_field("title", doc_text_options.clone());
-    schema_builder.add_text_field("name", STRING | STORED);
-    schema_builder.add_text_field("qualified_name", STRING | STORED);
+    schema_builder.add_text_field("name", source_name_options.clone());
+    schema_builder.add_text_field("qualified_name", source_name_options);
     schema_builder.add_text_field("kind", STRING | STORED);
     schema_builder.add_text_field("signature", TEXT | STORED);
     schema_builder.add_text_field("body_text", doc_text_options.clone());
@@ -736,13 +747,20 @@ fn build_tantivy_schema() -> Schema {
     schema_builder.build()
 }
 
-/// Registers the analyzer used for stemmed documentation-style text search.
-fn register_doc_text_analyzer(index: &Index) {
+/// Registers the analyzers used for prose and source-symbol search.
+fn register_text_analyzers(index: &Index) {
     let analyzer = TextAnalyzer::builder(SimpleTokenizer::default())
         .filter(LowerCaser)
         .filter(Stemmer::new(Language::English))
         .build();
     index.tokenizers().register(DOC_TEXT_ANALYZER, analyzer);
+
+    let source_name_analyzer = TextAnalyzer::builder(SimpleTokenizer::default())
+        .filter(LowerCaser)
+        .build();
+    index
+        .tokenizers()
+        .register(SOURCE_NAME_ANALYZER, source_name_analyzer);
 }
 
 struct TantivySchemaFields {
@@ -922,7 +940,7 @@ pub fn search_tantivy_index_with_explain(
             ),
         )
     })?;
-    register_doc_text_analyzer(&index);
+    register_text_analyzers(&index);
     let schema = index.schema();
     let title = get_tantivy_doc_field(&schema, "title")?;
     let name = get_tantivy_doc_field(&schema, "name")?;
