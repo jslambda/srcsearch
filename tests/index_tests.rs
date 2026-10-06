@@ -136,14 +136,14 @@ fn doc_scope_search_ignores_code_and_signature_matches()
     write_tantivy_index(&records, &output_dir, Some(project_root))?;
 
     let all_hits =
-        search_tantivy_index_with_explain(&output_dir, "i32", 10, SearchScope::All, false)?;
+        search_tantivy_index_with_explain(&output_dir, "i32", 10, SearchScope::All, false, 2.0)?;
     assert!(
         !all_hits.is_empty(),
         "expected a code/signature hit in all scope"
     );
 
     let doc_hits =
-        search_tantivy_index_with_explain(&output_dir, "i32", 10, SearchScope::Doc, false)?;
+        search_tantivy_index_with_explain(&output_dir, "i32", 10, SearchScope::Doc, false, 2.0)?;
     assert!(
         doc_hits.is_empty(),
         "did not expect code/signature-only query to match in doc scope"
@@ -232,7 +232,8 @@ class OtherClient:
     assert_eq!(method_names, ["Client.fetch", "OtherClient.fetch"]);
 
     write_tantivy_index(&records, &index_dir, Some(&root))?;
-    let hits = search_tantivy_index_with_explain(&index_dir, "greet", 10, SearchScope::All, false)?;
+    let hits =
+        search_tantivy_index_with_explain(&index_dir, "greet", 10, SearchScope::All, false, 2.0)?;
     assert!(hits.iter().any(|hit| {
         hit.hit.record_type == "python"
             && hit.hit.file_path == "service.py"
@@ -240,7 +241,7 @@ class OtherClient:
     }));
 
     let fetch_hits =
-        search_tantivy_index_with_explain(&index_dir, "fetch", 10, SearchScope::All, false)?;
+        search_tantivy_index_with_explain(&index_dir, "fetch", 10, SearchScope::All, false, 2.0)?;
     let mut fetch_method_names: Vec<_> = fetch_hits
         .iter()
         .filter(|hit| hit.hit.name.as_deref() == Some("fetch"))
@@ -255,6 +256,7 @@ class OtherClient:
         10,
         SearchScope::All,
         false,
+        2.0,
     )?;
     assert_eq!(qualified_hits.len(), 1);
     assert_eq!(
@@ -268,6 +270,7 @@ class OtherClient:
         10,
         SearchScope::All,
         false,
+        2.0,
     )?;
     assert_eq!(container_hits.len(), 1);
     assert_eq!(
@@ -282,6 +285,7 @@ class OtherClient:
             10,
             SearchScope::All,
             false,
+            2.0,
         )?;
         assert!(
             hits.is_empty(),
@@ -295,6 +299,7 @@ class OtherClient:
         10,
         SearchScope::All,
         false,
+        2.0,
     )?;
     assert_eq!(other_client_hits.len(), 1);
     assert_eq!(

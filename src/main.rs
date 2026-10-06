@@ -4,8 +4,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 use srcsearch::{
     SearchHit, SearchHitWithExplanation, SearchScope, index_project, index_target,
-    search_tantivy_index_with_signature_boost, update_tantivy_index, write_json,
-    write_tantivy_index,
+    search_tantivy_index_with_explain, update_tantivy_index, write_json, write_tantivy_index,
 };
 
 #[derive(Clone, Debug, ValueEnum, PartialEq, Eq)]
@@ -247,7 +246,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             json,
             explain,
         } => {
-            let hits = search_tantivy_index_with_signature_boost(
+            let hits = search_tantivy_index_with_explain(
                 &index_dir,
                 &query,
                 limit,

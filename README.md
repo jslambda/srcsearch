@@ -290,9 +290,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 To choose a signature boost in code, call
-`search_tantivy_index_with_signature_boost(index_dir, query, limit, scope, explain, signature_boost)`.
-The accepted boost values are `2.0`, `3.0`, and `4.0`; existing search functions
-continue to use `2.0`.
+`search_tantivy_index_with_explain(index_dir, query, limit, scope, explain, signature_boost)`.
+The accepted boost values are `2.0`, `3.0`, and `4.0`. The simpler
+`search_tantivy_index` function uses `2.0`.
 
 ---
 

@@ -874,22 +874,11 @@ pub fn search_tantivy_index(
     limit: i64,
     scope: SearchScope,
 ) -> AppResult<Vec<SearchHit>> {
-    search_tantivy_index_with_explain(index_dir, query, limit, scope, false)
+    search_tantivy_index_with_explain(index_dir, query, limit, scope, false, 2.0)
         .map(|hits| hits.into_iter().map(|entry| entry.hit).collect())
 }
-/// Executes search with the default 2.0 signature boost and optionally attaches score explanations.
+/// Executes search with a signature boost of 2.0, 3.0, or 4.0 and optional score explanations.
 pub fn search_tantivy_index_with_explain(
-    index_dir: &Path,
-    query: &str,
-    limit: i64,
-    scope: SearchScope,
-    explain: bool,
-) -> AppResult<Vec<SearchHitWithExplanation>> {
-    search_tantivy_index_with_signature_boost(index_dir, query, limit, scope, explain, 2.0)
-}
-
-/// Executes search with a signature-field boost of 2.0, 3.0, or 4.0.
-pub fn search_tantivy_index_with_signature_boost(
     index_dir: &Path,
     query: &str,
     limit: i64,
@@ -1153,8 +1142,8 @@ mod tests {
     use super::{
         MatchedTerm, SearchRecord, SearchScope, collect_files, extract_code_snippet,
         extract_matching_terms, get_tantivy_doc_field, replace_explanation_field_indices,
-        search_tantivy_index, search_tantivy_index_with_explain,
-        search_tantivy_index_with_signature_boost, update_tantivy_index, write_tantivy_index,
+        search_tantivy_index, search_tantivy_index_with_explain, update_tantivy_index,
+        write_tantivy_index,
     };
     use markdown2json::{CodeBlock, Section};
     use rust2json::IndexEntry;
@@ -1719,7 +1708,7 @@ mod tests {
         let scores: Vec<_> = [2.0, 3.0, 4.0]
             .into_iter()
             .map(|boost| {
-                let hits = search_tantivy_index_with_signature_boost(
+                let hits = search_tantivy_index_with_explain(
                     &output_dir,
                     "target",
                     10,
@@ -1734,12 +1723,11 @@ mod tests {
             .collect();
         assert!(scores[0] < scores[1] && scores[1] < scores[2]);
 
-        let default_hits =
-            search_tantivy_index_with_explain(&output_dir, "target", 10, SearchScope::All, false)
-                .expect("default search should succeed");
-        assert_eq!(default_hits[0].hit.score, scores[0]);
+        let default_hits = search_tantivy_index(&output_dir, "target", 10, SearchScope::All)
+            .expect("default search should succeed");
+        assert_eq!(default_hits[0].score, scores[0]);
 
-        let err = search_tantivy_index_with_signature_boost(
+        let err = search_tantivy_index_with_explain(
             &output_dir,
             "target",
             10,
@@ -1826,6 +1814,7 @@ mod tests {
             10,
             SearchScope::All,
             true,
+            2.0,
         )
         .expect("search should succeed");
 
@@ -1985,6 +1974,7 @@ mod tests {
             10,
             SearchScope::All,
             false,
+            2.0,
         );
 
         assert!(result.is_err());
@@ -2015,6 +2005,7 @@ mod tests {
             -1,
             SearchScope::All,
             false,
+            2.0,
         );
 
         assert!(result.is_err());
@@ -2047,6 +2038,7 @@ mod tests {
             0,
             SearchScope::All,
             false,
+            2.0,
         );
 
         assert!(result.is_err());
