@@ -187,7 +187,18 @@ fn indexes_and_searches_python_source() -> std::result::Result<(), Box<dyn std::
     fs::create_dir_all(&root)?;
     fs::write(
         root.join("service.py"),
-        "def greet(name: str) -> str:\n    \"\"\"Return a greeting.\"\"\"\n    return f\"Hello, {name}\"\n\nclass Client:\n    def fetch(self):\n        pass\n\nclass OtherClient:\n    def fetch(self):\n        pass\n",
+        r#"def greet(name: str) -> str:
+    """Return a greeting."""
+    return f"Hello, {name}"
+
+class Client:
+    def fetch(self):
+        pass
+
+class OtherClient:
+    def fetch(self):
+        pass
+"#,
     )?;
 
     let records = index_project(&root)?;
