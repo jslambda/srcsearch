@@ -4,7 +4,8 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 use srcsearch::{
     SearchHit, SearchHitWithExplanation, SearchScope, index_project, index_target,
-    search_tantivy_index_with_explain, update_tantivy_index, write_json, write_tantivy_index,
+    search_tantivy_index_with_signature_boost, update_tantivy_index, write_json,
+    write_tantivy_index,
 };
 
 #[derive(Clone, Debug, ValueEnum, PartialEq, Eq)]
@@ -22,6 +23,26 @@ impl From<SearchScopeArg> for SearchScope {
     }
 }
 
+#[derive(Clone, Debug, ValueEnum, PartialEq, Eq)]
+enum SignatureBoostArg {
+    #[value(name = "2.0")]
+    Two,
+    #[value(name = "3.0")]
+    Three,
+    #[value(name = "4.0")]
+    Four,
+}
+
+impl SignatureBoostArg {
+    fn value(&self) -> f32 {
+        match self {
+            Self::Two => 2.0,
+            Self::Three => 3.0,
+            Self::Four => 4.0,
+        }
+    }
+}
+
 const CLI_USAGE_HELP: &str = concat!(
     "Usage:\n",
     "  srcsearch json --project-root . --output index.json\n",
@@ -31,7 +52,8 @@ const CLI_USAGE_HELP: &str = concat!(
     "  srcsearch update --project-root . --index-dir index --changed-file src/lib.rs\n",
     "  srcsearch search --index-dir index --query quickstart --scope doc\n",
     "  srcsearch search -i index -q quickstart -s doc\n",
-    "  srcsearch search -i index -q quickstart --explain",
+    "  srcsearch search -i index -q quickstart --explain\n",
+    "  srcsearch search -i index -q quickstart --signature-boost 3.0",
 );
 
 #[derive(Debug, Parser)]
@@ -98,6 +120,8 @@ enum Commands {
         limit: i64,
         #[arg(long, short = 's', value_enum, default_value_t = SearchScopeArg::All)]
         scope: SearchScopeArg,
+        #[arg(long, value_enum, default_value_t = SignatureBoostArg::Two)]
+        signature_boost: SignatureBoostArg,
         #[arg(long)]
         json: bool,
         #[arg(long, help = "Show Tantivy score explanations for the top three hits")]
@@ -173,7 +197,7 @@ fn format_search_hits_with_explanations(hits: &[SearchHitWithExplanation]) -> St
     output
 }
 
-/// Parses CLI arguments and dispatches to indexing, update, or search workflows.
+/// Parses CLI arguments and dispatches to indexing, update, or configurable search workflows.
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
 
@@ -219,15 +243,17 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             query,
             limit,
             scope,
+            signature_boost,
             json,
             explain,
         } => {
-            let hits = search_tantivy_index_with_explain(
+            let hits = search_tantivy_index_with_signature_boost(
                 &index_dir,
                 &query,
                 limit,
                 scope.into(),
                 explain,
+                signature_boost.value(),
             )?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&hits)?);
@@ -242,7 +268,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Commands, SearchScopeArg, format_search_hits};
+    use super::{Cli, Commands, SearchScopeArg, SignatureBoostArg, format_search_hits};
     use clap::{CommandFactory, Parser, error::ErrorKind};
     use srcsearch::SearchHit;
     use std::path::PathBuf;
@@ -409,6 +435,7 @@ mod tests {
                 query,
                 limit,
                 scope,
+                signature_boost,
                 json,
                 explain,
             } => {
@@ -416,6 +443,7 @@ mod tests {
                 assert_eq!(query, "quickstart");
                 assert_eq!(limit, 10);
                 assert_eq!(scope, SearchScopeArg::All);
+                assert_eq!(signature_boost, SignatureBoostArg::Two);
                 assert!(!json);
                 assert!(!explain);
             }
@@ -444,6 +472,7 @@ mod tests {
                 query,
                 limit,
                 scope,
+                signature_boost,
                 json,
                 explain,
             } => {
@@ -451,6 +480,7 @@ mod tests {
                 assert_eq!(query, "tantivy");
                 assert_eq!(limit, 5);
                 assert_eq!(scope, SearchScopeArg::All);
+                assert_eq!(signature_boost, SignatureBoostArg::Two);
                 assert!(!json);
                 assert!(!explain);
             }
@@ -539,6 +569,49 @@ mod tests {
             "invalid",
         ])
         .expect_err("invalid scope should fail");
+
+        assert_eq!(err.kind(), ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn parses_allowed_signature_boosts() {
+        for (value, expected) in [
+            ("2.0", SignatureBoostArg::Two),
+            ("3.0", SignatureBoostArg::Three),
+            ("4.0", SignatureBoostArg::Four),
+        ] {
+            let cli = Cli::parse_from([
+                "srcsearch",
+                "search",
+                "-i",
+                "index",
+                "-q",
+                "target",
+                "--signature-boost",
+                value,
+            ]);
+            match cli.command {
+                Commands::Search {
+                    signature_boost, ..
+                } => assert_eq!(signature_boost, expected),
+                _ => panic!("expected search subcommand"),
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_other_signature_boosts() {
+        let err = Cli::try_parse_from([
+            "srcsearch",
+            "search",
+            "-i",
+            "index",
+            "-q",
+            "target",
+            "--signature-boost",
+            "5.0",
+        ])
+        .expect_err("unsupported signature boost should fail");
 
         assert_eq!(err.kind(), ErrorKind::InvalidValue);
     }
@@ -657,5 +730,6 @@ mod tests {
         assert!(help.contains("srcsearch search --index-dir index --query quickstart --scope doc"));
         assert!(help.contains("srcsearch search -i index -q quickstart -s doc"));
         assert!(help.contains("srcsearch search -i index -q quickstart --explain"));
+        assert!(help.contains("srcsearch search -i index -q quickstart --signature-boost 3.0"));
     }
 }

@@ -89,6 +89,15 @@ Restrict search to documentation-focused fields only:
 cargo run -- search --index-dir index --query quickstart --scope doc
 ```
 
+Adjust how strongly matches in the `signature` field affect ranking:
+
+```bash
+cargo run -- search --index-dir index --query target --signature-boost 3.0
+```
+
+`--signature-boost` accepts `2.0` (default), `3.0`, or `4.0`. It affects ranking
+when `--scope all` includes `signature`; `--scope doc` excludes that field.
+
 JSON output:
 
 ```bash
@@ -279,6 +288,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+To choose a signature boost in code, call
+`search_tantivy_index_with_signature_boost(index_dir, query, limit, scope, explain, signature_boost)`.
+The accepted boost values are `2.0`, `3.0`, and `4.0`; existing search functions
+continue to use `2.0`.
 
 ---
 
