@@ -874,17 +874,25 @@ pub fn search_tantivy_index(
     limit: i64,
     scope: SearchScope,
 ) -> AppResult<Vec<SearchHit>> {
-    search_tantivy_index_with_explain(index_dir, query, limit, scope, false)
+    search_tantivy_index_with_explain(index_dir, query, limit, scope, false, 2.0)
         .map(|hits| hits.into_iter().map(|entry| entry.hit).collect())
 }
-/// Executes search and optionally attaches Tantivy score explanations for the top results.
+/// Executes search with a signature boost of 2.0, 3.0, or 4.0 and optional score explanations.
 pub fn search_tantivy_index_with_explain(
     index_dir: &Path,
     query: &str,
     limit: i64,
     scope: SearchScope,
     explain: bool,
+    signature_boost: Score,
 ) -> AppResult<Vec<SearchHitWithExplanation>> {
+    if ![2.0, 3.0, 4.0].contains(&signature_boost) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "signature boost must be 2.0, 3.0, or 4.0",
+        )
+        .into());
+    }
     if limit <= 0 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -954,7 +962,7 @@ pub fn search_tantivy_index_with_explain(
         query_parser.set_field_boost(qualified_name, 4.0);
     }
     query_parser.set_field_boost(doc_field, 2.0);
-    query_parser.set_field_boost(signature, 2.0);
+    query_parser.set_field_boost(signature, signature_boost);
     query_parser.set_field_boost(body_text, 2.0);
     query_parser.set_field_boost(code_field, 1.0);
     let parsed_query = query_parser.parse_query(query).map_err(|err| {
@@ -1683,6 +1691,57 @@ mod tests {
     }
 
     #[test]
+    fn signature_boost_increases_signature_match_score() {
+        let output_dir = temp_path("search-index-signature-boost");
+        let records = vec![SearchRecord::RustIndexEntry(IndexEntry {
+            kind: "fn".to_string(),
+            name: "helper".to_string(),
+            file: "src/lib.rs".to_string(),
+            line_start: 1,
+            line_end: 1,
+            signature: "pub fn target()".to_string(),
+            doc_summary: None,
+            doc: None,
+        })];
+        write_tantivy_index(&records, &output_dir, None).expect("index write should succeed");
+
+        let scores: Vec<_> = [2.0, 3.0, 4.0]
+            .into_iter()
+            .map(|boost| {
+                let hits = search_tantivy_index_with_explain(
+                    &output_dir,
+                    "target",
+                    10,
+                    SearchScope::All,
+                    false,
+                    boost,
+                )
+                .expect("search should succeed");
+                assert_eq!(hits.len(), 1);
+                hits[0].hit.score
+            })
+            .collect();
+        assert!(scores[0] < scores[1] && scores[1] < scores[2]);
+
+        let default_hits = search_tantivy_index(&output_dir, "target", 10, SearchScope::All)
+            .expect("default search should succeed");
+        assert_eq!(default_hits[0].score, scores[0]);
+
+        let err = search_tantivy_index_with_explain(
+            &output_dir,
+            "target",
+            10,
+            SearchScope::All,
+            false,
+            5.0,
+        )
+        .expect_err("unsupported signature boost should fail");
+        assert!(err.to_string().contains("signature boost must be"));
+
+        let _ = fs::remove_dir_all(&output_dir);
+    }
+
+    #[test]
     fn search_tantivy_index_with_explain_limits_explanations_to_top_four() {
         let output_dir = temp_path("search-index-with-explain");
         let records = vec![
@@ -1755,6 +1814,7 @@ mod tests {
             10,
             SearchScope::All,
             true,
+            2.0,
         )
         .expect("search should succeed");
 
@@ -1914,6 +1974,7 @@ mod tests {
             10,
             SearchScope::All,
             false,
+            2.0,
         );
 
         assert!(result.is_err());
@@ -1944,6 +2005,7 @@ mod tests {
             -1,
             SearchScope::All,
             false,
+            2.0,
         );
 
         assert!(result.is_err());
@@ -1976,6 +2038,7 @@ mod tests {
             0,
             SearchScope::All,
             false,
+            2.0,
         );
 
         assert!(result.is_err());
