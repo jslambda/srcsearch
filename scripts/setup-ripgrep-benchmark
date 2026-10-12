@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+workspace=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+project_dir="$workspace/.project"
+ripgrep_dir="$project_dir/ripgrep"
+ripgrep_commit=3fce3b5bb0236da2df6d99672afb8a719642eca7
+
+if [[ -L "$project_dir" || ( -e "$project_dir" && ! -d "$project_dir" ) ]]; then
+    printf 'Error: %s must be a directory, not a file or symlink.\n' "$project_dir" >&2
+    exit 1
+fi
+
+if [[ -d "$project_dir" && -n "$(find "$project_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+    printf 'Error: %s is not empty.\n' "$project_dir" >&2
+    exit 1
+fi
+
+for command in git rg cargo; do
+    if ! command -v "$command" >/dev/null 2>&1; then
+        printf 'Error: %s is required.\n' "$command" >&2
+        exit 1
+    fi
+done
+
+mkdir -p "$project_dir"
+git clone https://github.com/BurntSushi/ripgrep.git "$ripgrep_dir"
+git -C "$ripgrep_dir" checkout --detach "$ripgrep_commit"
+
+rg_version=$(rg --version)
+printf 'Installed ripgrep: %s\n' "${rg_version%%$'\n'*}"
+
+cargo build --manifest-path "$workspace/Cargo.toml"
+printf 'Built srcsearch: '
+"$workspace/target/debug/srcsearch" --version
