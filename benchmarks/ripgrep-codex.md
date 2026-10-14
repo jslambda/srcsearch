@@ -15,8 +15,8 @@ search strategies for either tool.
 
 ## Corpus and setup
 
-- ripgrep: `.project/ripgrep`, commit
-  `3fce3b5bb0236da2df6d99672afb8a719642eca7`. ripgrep is assumed to be checked out in `.project/ripgrep`.
+- ripgrep: `.benchmark/ripgrep`, commit
+  `3fce3b5bb0236da2df6d99672afb8a719642eca7`. ripgrep is assumed to be checked out in `.benchmark/ripgrep`.
 - srcsearch: `0.2.0`, built from this checkout
 - `rg`: local `ripgrep 15.2.0`
 - Index build is outside the query timings. Build it once, then run all
@@ -25,8 +25,8 @@ search strategies for either tool.
 ```sh
 cargo build
 bench_index=$(mktemp -d)
-target/debug/srcsearch index -p .project/ripgrep -o "$bench_index"
-cd .project/ripgrep
+target/debug/srcsearch index -p .benchmark/ripgrep -o "$bench_index"
+cd .benchmark/ripgrep
 srcsearch_bin=$(realpath ../../target/debug/srcsearch)
 ```
 

@@ -32,15 +32,15 @@ cargo() {
 
 export -f git rg cargo
 
-for project_state in absent empty; do
+for benchmark_state in absent empty; do
     test_workspace=$(fixture)
     command_log="$test_workspace/commands"
     export test_workspace command_log
-    if [[ "$project_state" == empty ]]; then
-        mkdir -p "$test_workspace/.project"
+    if [[ "$benchmark_state" == empty ]]; then
+        mkdir -p "$test_workspace/.benchmark"
     fi
     output=$("$test_workspace/scripts/setup-ripgrep-benchmark")
-    [[ -d "$test_workspace/.project/ripgrep" ]]
+    [[ -d "$test_workspace/.benchmark/ripgrep" ]]
     [[ "$output" == *'ripgrep 15.2.0'* ]]
     [[ "$output" == *'srcsearch 0.2.0'* ]]
     command grep -q '^git clone https://github.com/BurntSushi/ripgrep.git ' "$command_log"
@@ -52,10 +52,10 @@ for entry in visible .hidden; do
     test_workspace=$(fixture)
     command_log="$test_workspace/commands"
     export test_workspace command_log
-    mkdir -p "$test_workspace/.project"
-    touch "$test_workspace/.project/$entry"
+    mkdir -p "$test_workspace/.benchmark"
+    touch "$test_workspace/.benchmark/$entry"
     if "$test_workspace/scripts/setup-ripgrep-benchmark" > "$test_workspace/output" 2>&1; then
-        printf 'Expected nonempty .project to fail.\n' >&2
+        printf 'Expected nonempty .benchmark to fail.\n' >&2
         exit 1
     fi
     [[ ! -e "$command_log" ]]
@@ -65,9 +65,9 @@ done
 test_workspace=$(fixture)
 command_log="$test_workspace/commands"
 export test_workspace command_log
-ln -s "$test_workspace/elsewhere" "$test_workspace/.project"
+ln -s "$test_workspace/elsewhere" "$test_workspace/.benchmark"
 if "$test_workspace/scripts/setup-ripgrep-benchmark" > "$test_workspace/output" 2>&1; then
-    printf 'Expected symlinked .project to fail.\n' >&2
+    printf 'Expected symlinked .benchmark to fail.\n' >&2
     exit 1
 fi
 [[ ! -e "$command_log" ]]
