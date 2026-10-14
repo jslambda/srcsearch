@@ -18,6 +18,7 @@ Cargo.lock
 **/mutants.out*/
 
 .project
+.benchmark
 
 target
 .DS_Store
